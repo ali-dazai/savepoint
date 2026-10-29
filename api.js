@@ -26,6 +26,11 @@
     return new Error(CATALOG_ERRORS[code] || "Can't reach the games database right now. You can still add the game by hand.");
   }
 
+  const CATALOG_COLS = "igdb_id, name, cover_image_id, cover_color, first_release_date, release_human, hypes, platforms, genres, summary, critic_score, critic_count, igdb_url, steam_appid, similar_ids, steam_desc, steam_pct, steam_total, steam_players, steam_fetched_at, fetched_at";
+  function cleanCatalog(x) {
+    return { ...x, critic_score: x.critic_score == null ? null : Number(x.critic_score) };
+  }
+
   // ---------------- Supabase ----------------
   class SupabaseApi {
     constructor(url, key) {
@@ -75,7 +80,7 @@
         this.sb.from("profiles").select("id, display_name, color, created_at"),
         this.sb.from("games").select("id, title, platform, year, cover_url, added_by, created_at, igdb_id"),
         this.sb.from("entries").select("id, game_id, user_id, status, rating, hours, review, spoiler, started_at, finished_at, created_at, updated_at"),
-        this.sb.from("catalog_games").select("igdb_id, name, cover_image_id, first_release_date, platforms, genres, summary, critic_score, critic_count, igdb_url, steam_appid, similar_ids"),
+        this.sb.from("catalog_games").select(CATALOG_COLS),
       ]);
       const err = p.error || g.error || e.error;
       if (err) throw new Error(errMsg(err));
@@ -83,7 +88,7 @@
         profiles: p.data,
         games: g.data,
         entries: e.data.map((x) => ({ ...x, rating: x.rating == null ? null : Number(x.rating), hours: x.hours == null ? null : Number(x.hours) })),
-        catalog: c.error ? [] : c.data.map((x) => ({ ...x, critic_score: x.critic_score == null ? null : Number(x.critic_score) })),
+        catalog: c.error ? [] : c.data.map(cleanCatalog),
       };
     }
     async addGame(fields) {
@@ -141,6 +146,12 @@
     async catalogSearch(q) { return (await this.catalog({ action: "search", q })).results || []; }
     async catalogGet(igdbId) { return (await this.catalog({ action: "get", igdb_id: igdbId })).game; }
     async catalogSimilar(ids) { return (await this.catalog({ action: "similar", ids })).games || []; }
+    async catalogSteam(igdbId) { return (await this.catalog({ action: "steam", igdb_id: igdbId })).steam || null; }
+    async catalogRefresh(ids) { return ((await this.catalog({ action: "refresh", ids })).games || []).map(cleanCatalog); }
+    async catalogDiscover() {
+      const d = await this.catalog({ action: "discover" });
+      return { built_at: d.built_at, has_history: !!d.has_history, trending: d.trending || [], upcoming: d.upcoming || [] };
+    }
     subscribe(onChange) {
       this.unsubscribe();
       try {
@@ -157,7 +168,7 @@
   }
 
   // ---------------- Demo ----------------
-  const DEMO_KEY = "savepoint-demo-v3";
+  const DEMO_KEY = "savepoint-demo-v4";
   const ME = "demo-me";
 
   function uid() {
@@ -165,6 +176,26 @@
   }
   function daysAgo(d, h = 0) {
     return new Date(Date.now() - d * 864e5 - h * 36e5).toISOString();
+  }
+  // Local calendar day n days from today, as YYYY-MM-DD, and the way IGDB writes it ("Nov 11, 2026").
+  function dayFromNow(n) {
+    const t = new Date(); const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() + n);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function humanDay(s) {
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+  function demoRow(g) {
+    const date = g.rel != null ? dayFromNow(g.rel) : g.year ? g.year + "-06-01" : null;
+    return {
+      igdb_id: g.igdb_id, name: g.name, cover_image_id: null, cover_color: g.color || null,
+      first_release_date: date, release_human: g.rel != null ? humanDay(date) : g.human || null, hypes: g.hypes || null,
+      platforms: g.platforms, genres: g.genres, summary: g.summary, critic_score: g.critic_score ?? null, critic_count: g.critic_count ?? null,
+      igdb_url: null, steam_appid: g.steam || null, similar_ids: DEMO_SIMILAR[g.igdb_id] || [],
+      steam_desc: null, steam_pct: null, steam_total: null, steam_players: null, steam_fetched_at: null,
+      fetched_at: new Date().toISOString(),
+    };
   }
   function seed() {
     const P = [
@@ -178,8 +209,9 @@
       ["Celeste", "Switch", 2018], ["Baldur's Gate 3", "PC", 2023], ["Animal Well", "PS5", 2024],
       ["Outer Wilds", "PC", 2019], ["Stardew Valley", "Switch", 2016], ["Astro Bot", "PS5", 2024],
       ["Hollow Knight: Silksong", "Switch", 2025], ["Disco Elysium", "PC", 2019], ["Tetris Effect", "Quest", 2018],
+      ["Ghost Harbor", "PC", null], ["Lantern Road", null, null],
     ].map(([title, platform, year], i) => ({
-      id: "g" + i, title, platform, year, cover_url: null, igdb_id: { 0: 9001, 2: 9004 }[i] || null,
+      id: "g" + i, title, platform, year, cover_url: null, igdb_id: { 0: 9001, 2: 9004, 12: 9011, 13: 9013 }[i] || null,
       added_by: P[i % 4].id, created_at: daysAgo(40 - i),
     }));
     const E = [];
@@ -208,25 +240,36 @@
     add(11, "demo-priya", "finished", 4, 10, "Zone mode in VR is something else.", 12, 0);
     add(1, ME, "finished", 4, 20, "Dangerously moreish.", 11, 0);
     add(11, ME, "dropped", 3, 4, "", 14, 0);
-    const C = [9001, 9004].map((id) => {
-      const g = DEMO_CATALOG.find((x) => x.igdb_id === id);
-      return { igdb_id: g.igdb_id, name: g.name, cover_image_id: null, first_release_date: g.year + "-06-01", platforms: g.platforms, genres: g.genres, summary: g.summary, critic_score: g.critic_score, critic_count: g.critic_count, igdb_url: null, steam_appid: null, similar_ids: DEMO_SIMILAR[id] || [] };
-    });
+    add(12, ME, "want", null, null, "", 2, 0);
+    add(13, "demo-maya", "want", null, null, "", 3, 0);
+    add(12, "demo-jon", "want", null, null, "", 4, 0);
+    const C = [9001, 9004, 9011, 9013].map((id) => demoRow(DEMO_CATALOG.find((x) => x.igdb_id === id)));
     return { profiles: P, games: G, entries: E, catalog: C };
   }
 
   const DEMO_CATALOG = [
-    { igdb_id: 9001, name: "Hades II", year: 2025, platforms: ["PC", "Switch", "PS5"], genres: ["Roguelike", "Action"], summary: "Battle beyond the Underworld as the Princess of the Underworld.", critic_score: 94, critic_count: 60 },
+    { igdb_id: 9001, name: "Hades II", year: 2025, platforms: ["PC", "Switch", "PS5"], genres: ["Roguelike", "Action"], summary: "Battle beyond the Underworld as the Princess of the Underworld.", critic_score: 94, critic_count: 60, color: "#b5442f", steam: "1145350" },
     { igdb_id: 9002, name: "Hollow Knight", year: 2017, platforms: ["PC", "Switch", "PS4", "XONE"], genres: ["Metroidvania", "Platform"], summary: "Forge your own path in an epic action adventure through a ruined kingdom of insects.", critic_score: 88, critic_count: 70 },
     { igdb_id: 9003, name: "Hollow Knight: Silksong", year: 2025, platforms: ["PC", "Switch", "PS5"], genres: ["Metroidvania"], summary: "Play as Hornet and explore a vast haunted kingdom.", critic_score: 91, critic_count: 80 },
-    { igdb_id: 9004, name: "Elden Ring", year: 2022, platforms: ["PC", "PS5", "XSX"], genres: ["RPG", "Adventure"], summary: "Rise, Tarnished, and be guided by grace.", critic_score: 95, critic_count: 90 },
+    { igdb_id: 9004, name: "Elden Ring", year: 2022, platforms: ["PC", "PS5", "Series X|S"], genres: ["RPG", "Adventure"], summary: "Rise, Tarnished, and be guided by grace.", critic_score: 95, critic_count: 90, color: "#a48c4c", steam: "1245620" },
     { igdb_id: 9005, name: "Zelda: Tears of the Kingdom", year: 2023, platforms: ["Switch"], genres: ["Adventure"], summary: "An epic adventure across the land and skies of Hyrule.", critic_score: 96, critic_count: 100 },
     { igdb_id: 9006, name: "Halo Infinite", year: 2021, platforms: ["PC", "XSX"], genres: ["Shooter"], summary: "Master Chief returns.", critic_score: 84, critic_count: 70 },
     { igdb_id: 9007, name: "Stardew Valley", year: 2016, platforms: ["PC", "Switch", "PS4", "iOS"], genres: ["Simulator", "RPG"], summary: "You've inherited your grandfather's old farm plot.", critic_score: 89, critic_count: 40 },
     { igdb_id: 9008, name: "Dark Souls III", year: 2016, platforms: ["PC", "PS4", "XONE"], genres: ["RPG"], summary: "As fires fade and the world falls into ruin.", critic_score: 89, critic_count: 80 },
     { igdb_id: 9009, name: "Sekiro: Shadows Die Twice", year: 2019, platforms: ["PC", "PS4", "XONE"], genres: ["Adventure"], summary: "Carve your own clever path to vengeance.", critic_score: 90, critic_count: 90 },
     { igdb_id: 9010, name: "Dead Cells", year: 2018, platforms: ["PC", "Switch", "PS4"], genres: ["Roguelike", "Platform"], summary: "Explore a sprawling, ever-changing castle.", critic_score: 89, critic_count: 50 },
+    // Made-up upcoming games for the demo calendar (dates are relative to today)
+    { igdb_id: 9011, name: "Ghost Harbor", rel: 12, platforms: ["PC", "PS5"], genres: ["Adventure"], summary: "A fishing town, a lighthouse that's been dark for forty years, and a ferry that only runs at night.", color: "#3f6f9a", hypes: 40 },
+    { igdb_id: 9012, name: "Starfall Tactics", rel: 3, platforms: ["PC", "Switch"], genres: ["Strategy"], summary: "Turn-based squad tactics on a crumbling orbital station.", color: "#6a4fa8", hypes: 25 },
+    { igdb_id: 9013, name: "Lantern Road", human: "2027", platforms: ["PC", "PS5", "Series X|S"], genres: ["RPG"], summary: "Walk a caravan across a desert that rearranges itself every night.", color: "#b07a35", hypes: 60 },
+    { igdb_id: 9014, name: "Neon Drift", rel: 25, platforms: ["PS5", "Series X|S"], genres: ["Racing"], summary: "Arcade street racing through a city that never turns its lights off.", color: "#b0386f", hypes: 18 },
+    { igdb_id: 9015, name: "Moonlit Kingdoms", rel: 48, platforms: ["Switch"], genres: ["Simulator"], summary: "Build a kingdom that only wakes up after dark.", color: "#3c5f8f", hypes: 30 },
+    { igdb_id: 9016, name: "Iron Tide", rel: 90, platforms: ["PC", "PS5", "Series X|S"], genres: ["Shooter"], summary: "Naval warfare in a drowned world.", color: "#4a5c66", hypes: 55 },
   ];
+  const DEMO_STEAM = {
+    9001: { desc: "Overwhelmingly Positive", pct: 96, total: 98213, players: 8210 },
+    9004: { desc: "Very Positive", pct: 93, total: 754321, players: 41020 },
+  };
   const DEMO_SIMILAR = { 9001: [9010, 9002], 9004: [9008, 9009, 9002] };
 
   class DemoApi {
@@ -255,7 +298,7 @@
       const n = String(q || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
       if (n.length < 2) return [];
       return DEMO_CATALOG.filter((g) => g.name.toLowerCase().replace(/[^a-z0-9]+/g, "").includes(n))
-        .map((g) => ({ igdb_id: g.igdb_id, name: g.name, year: g.year, cover_image_id: null, platforms: g.platforms }));
+        .map((g) => ({ igdb_id: g.igdb_id, name: g.name, year: g.year || (g.rel != null ? Number(dayFromNow(g.rel).slice(0, 4)) : null), cover_image_id: null, platforms: g.platforms }));
     }
     async catalogSimilar(ids) {
       await new Promise((r) => setTimeout(r, 150));
@@ -265,10 +308,33 @@
     async catalogGet(igdbId) {
       const g = DEMO_CATALOG.find((x) => x.igdb_id === igdbId);
       if (!g) throw new Error("That game isn't in the games database any more.");
-      const row = { igdb_id: g.igdb_id, name: g.name, cover_image_id: null, first_release_date: g.year + "-06-01", platforms: g.platforms, genres: g.genres, summary: g.summary, critic_score: g.critic_score, critic_count: g.critic_count, igdb_url: null, steam_appid: null, similar_ids: DEMO_SIMILAR[g.igdb_id] || [] };
-      this.db.catalog = (this.db.catalog || []).filter((x) => x.igdb_id !== igdbId).concat(row);
-      this.save();
-      return row;
+      const old = (this.db.catalog || []).find((x) => x.igdb_id === igdbId);
+      const row = old || demoRow(g);
+      if (!old) { this.db.catalog = (this.db.catalog || []).concat(row); this.save(); }
+      return { ...row };
+    }
+    async catalogSteam(igdbId) {
+      await new Promise((r) => setTimeout(r, 300));
+      const st = DEMO_STEAM[igdbId];
+      if (!st) return null;
+      const row = (this.db.catalog || []).find((x) => x.igdb_id === igdbId);
+      const fetched_at = new Date().toISOString();
+      if (row) { Object.assign(row, { steam_desc: st.desc, steam_pct: st.pct, steam_total: st.total, steam_players: st.players, steam_fetched_at: fetched_at }); this.save(); }
+      return { ...st, fetched_at, appid: row ? row.steam_appid : null };
+    }
+    async catalogRefresh(ids) {
+      return (this.db.catalog || []).filter((x) => ids.includes(x.igdb_id)).map((x) => ({ ...x }));
+    }
+    async catalogDiscover() {
+      await new Promise((r) => setTimeout(r, 250));
+      const light = (g) => ({ igdb_id: g.igdb_id, name: g.name, year: g.year || null, cover_image_id: null, platforms: g.platforms, critic_score: g.critic_score ?? null });
+      const reasons = { 9006: "+38% players this week", 9002: "Popular on Steam right now", 9010: "+6% Steam reviews this week", 9005: "Big on Twitch right now", 9007: "Popular on Steam right now", 9009: "Popular on Steam right now" };
+      const trending = Object.keys(reasons).map(Number).map((id) => ({ ...light(DEMO_CATALOG.find((x) => x.igdb_id === id)), reason: reasons[id] }));
+      const upcoming = DEMO_CATALOG.filter((g) => g.rel != null || g.human).map((g) => {
+        const date = g.rel != null ? dayFromNow(g.rel) : null;
+        return { ...light(g), year: date ? Number(date.slice(0, 4)) : null, date, human: date ? humanDay(date) : g.human, hypes: g.hypes || 0, wish_rank: null };
+      }).sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999"));
+      return { built_at: new Date().toISOString(), has_history: true, trending, upcoming };
     }
     async linkGame(gameId, igdbId) {
       if (igdbId != null && this.db.games.some((x) => x.igdb_id === igdbId && x.id !== gameId)) throw new Error("That game is already on the shelf.");

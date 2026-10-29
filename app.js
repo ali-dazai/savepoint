@@ -3,17 +3,8 @@
   const { SupabaseApi, DemoApi } = window.SavePointApi;
 
   // ---------------- Constants ----------------
-  const PLASTIC = [
-    { c: "#E5483B", d: "#B3302A" }, // tomato
-    { c: "#F2B63D", d: "#C58C1E" }, // mustard
-    { c: "#1E9C8F", d: "#137366" }, // teal
-    { c: "#3456D1", d: "#2238A0" }, // cobalt
-    { c: "#7A4FC9", d: "#58349A" }, // grape
-    { c: "#EE6FA3", d: "#C24D7F" }, // bubblegum
-    { c: "#7E9A2F", d: "#5D7420" }, // olive
-    { c: "#F07A2A", d: "#C25C17" }, // tangerine
-  ];
-  const INK = "#1C1F33";
+  // Profile colours (index stored in profiles.color). Muted so they sit well on black.
+  const AVATAR = ["#C4553F", "#B98A2E", "#2E8A7B", "#4C6FD0", "#7A55C4", "#C2508A", "#6F8B34", "#C96B2C"];
   const STATUSES = [
     { id: "playing", label: "Playing" },
     { id: "want", label: "Want to play" },
@@ -23,32 +14,44 @@
   ];
   const STATUS_LABEL = Object.fromEntries(STATUSES.map((s) => [s.id, s.label]));
   const VERB = { want: "wants to play", playing: "is playing", paused: "paused", finished: "finished", dropped: "dropped" };
+  const MY_VERB = { want: "want to play", playing: "are playing", paused: "paused", finished: "finished", dropped: "dropped" };
   const PLATFORMS = ["PC", "PS5", "PS4", "Switch", "Switch 2", "Xbox Series", "Xbox One", "Steam Deck", "iPhone", "Android", "Quest", "Retro"];
+  const PLAT_FILTERS = [
+    { id: "all", label: "All" }, { id: "pc", label: "PC" }, { id: "ps", label: "PlayStation" },
+    { id: "xbox", label: "Xbox" }, { id: "switch", label: "Switch" },
+  ];
+  const PRECISE_DAY = /^[A-Z][a-z]{2} \d{1,2}, \d{4}$/; // IGDB's "Nov 19, 2026": a real day, not "Q4 2026" or "2027"
 
   const STAR_PATH = "M12 2.6l2.83 6.07 6.65.73-4.95 4.52 1.36 6.55L12 17.2l-5.89 3.27 1.36-6.55-4.95-4.52 6.65-.73z";
   const ICON = {
-    feed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h13"/></svg>',
-    shelf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M5 3h14a1 1 0 0 1 1 1v15a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a1 1 0 0 1 1-1z"/><rect x="7.5" y="7" width="9" height="9" rx="1"/><path d="M9 4.5v1.5M12 4.5v1.5M15 4.5v1.5" stroke-linecap="round"/></svg>',
-    friends: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.7-3.6 3.3-5.5 6.5-5.5s5.8 1.9 6.5 5.5"/><path d="M15.5 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c1.9.8 3.1 2.6 3.5 5.2"/></svg>',
-    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
-    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
-    search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>',
-    back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+    feed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h13"/></svg>',
+    shelf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="5" height="16" rx="1"/><rect x="10.5" y="4" width="5" height="16" rx="1"/><path d="M17 5l3.5 1-3.6 14-3.4-1"/></svg>',
+    discover: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>',
+    friends: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.7-3.6 3.3-5.5 6.5-5.5s5.8 1.9 6.5 5.5M16 4.8a3.5 3.5 0 0 1 0 6.4M18 14.8c1.9.8 3.1 2.6 3.5 5.2"/></svg>',
+    plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+    close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+    search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>',
+    back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
+    share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3M7 8l5-5 5 5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>',
+    star: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${"M12 2.6l2.83 6.07 6.65.73-4.95 4.52 1.36 6.55L12 17.2l-5.89 3.27 1.36-6.55-4.95-4.52 6.65-.73z"}" fill="currentColor"/></svg>`,
   };
   const SESSION_STEPS = [0.5, 1, 2];
   const IGDB_IMG = (id, size) => `https://images.igdb.com/igdb/image/upload/t_${size}/${id}.jpg`;
+  const DAY_MS = 864e5;
 
   // ---------------- State ----------------
   const S = {
     api: null,
     me: null,
     profiles: [], games: [], entries: [], catalog: [],
-    tab: lsGet("sp-tab") || "feed",
+    tab: ["feed", "shelf", "discover", "friends"].includes(lsGet("sp-tab")) ? lsGet("sp-tab") : "feed",
     scope: lsGet("sp-scope") || "mine",
     status: "all",
     search: "",
     sort: lsGet("sp-sort") || "recent",
-    sheet: null, // { kind, ... }
+    sheet: null,           // the open sheet or page: { kind, ... }
+    back: null,            // where the back button goes from the open sheet/page
     draft: null,
     lastLoad: 0,
     seenAt: null,          // S22: feed items newer than this are "new since you last opened"
@@ -57,6 +60,13 @@
     cat: null,             // S31: catalogue search state for the open Add/Link sheet
     similar: null,         // S26: { key, games } IGDB games similar to ones you loved
     share: null,           // S27: { gameId, include, url, blob, busy }
+    disc: null,            // S33/S34: { data: { trending, upcoming, has_history }, at, error }
+    discView: lsGet("sp-disc-view") === "calendar" ? "calendar" : "trending",
+    plat: lsGet("sp-plat") || "all",
+    ext: {},               // full catalogue rows for games that aren't on the shelf (opened from Discover/picks)
+    refreshed: new Set(),  // catalogue rows already refreshed this session
+    steamTried: new Set(), // S35: Steam lookups already done this session
+    steamLoading: new Set(),
   };
   let idx = { p: {}, g: {}, byGame: {}, c: {}, byIgdb: {} };
 
@@ -81,11 +91,20 @@
     const d = new Date(iso);
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
   }
+  function since(iso) {
+    const days = Math.floor((Date.now() - new Date(iso).getTime()) / DAY_MS);
+    if (days < 1) return "today";
+    if (days < 2) return "yesterday";
+    if (days < 14) return `${days} days ago`;
+    if (days < 60) return `${Math.round(days / 7)} weeks ago`;
+    return `${Math.round(days / 30)} months ago`;
+  }
   function fmtHours(h) { return h == null ? "" : (Math.round(h * 10) / 10) + "h"; }
-  function fmtDate(iso) {
-    if (!iso) return "";
-    const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+  function fmtNum(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
+    if (n >= 1e4) return Math.round(n / 1e3) + "k";
+    if (n >= 1e3) return (n / 1e3).toFixed(1).replace(/\.0$/, "") + "k";
+    return String(n);
   }
   function dateInput(iso) {
     if (!iso) return "";
@@ -93,9 +112,18 @@
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
   function fromDateInput(v) { return v ? new Date(v + "T12:00:00").toISOString() : null; }
+  function todayISO() { return dateInput(new Date().toISOString()); }
+  function parseDay(s) { const [y, m, d] = String(s).split("-").map(Number); return new Date(y, m - 1, d); }
+  function addDays(s, n) { const d = parseDay(s); d.setDate(d.getDate() + n); return dateInput(d.toISOString()); }
+  function fmtDay(s, withYear) {
+    const d = parseDay(s);
+    const show = withYear || d.getFullYear() !== new Date().getFullYear();
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: show ? "numeric" : undefined });
+  }
+  function daysUntil(s) { return Math.round((parseDay(s) - parseDay(todayISO())) / DAY_MS); }
   function took(e) {
     if (!e || !e.started_at || !e.finished_at) return "";
-    const days = Math.round((new Date(e.finished_at) - new Date(e.started_at)) / 864e5);
+    const days = Math.round((new Date(e.finished_at) - new Date(e.started_at)) / DAY_MS);
     if (days < 0) return "";
     if (days < 1) return "in a day";
     if (days < 14) return `in ${days} days`;
@@ -103,7 +131,10 @@
     return `in ${Math.round(days / 30)} months`;
   }
   function fmtRating(r) { return r == null ? "" : (Number.isInteger(r) ? r.toFixed(0) : r.toFixed(1)); }
+  const round1 = (n) => Math.round(n * 10) / 10;
   const $ = (sel, root = document) => root.querySelector(sel);
+  function safeJson(s) { try { return JSON.parse(s); } catch (_) { return null; } }
+  function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
 
   // ---------------- Derived data ----------------
   function reindex() {
@@ -130,6 +161,64 @@
     const p = idx.p[id];
     return p ? p.display_name : "Someone";
   }
+  function verbFor(e) { return e.user_id === S.me ? MY_VERB[e.status] : VERB[e.status]; }
+  // "You want to play, Maya finished": who in the group has this game, and how.
+  function groupLine(gameId, max = 2) {
+    const es = (idx.byGame[gameId] || []).slice().sort((a, b) => (a.user_id === S.me ? -1 : b.user_id === S.me ? 1 : b.updated_at.localeCompare(a.updated_at)));
+    if (!es.length) return "";
+    const bits = es.slice(0, max).map((e) => `${nameOf(e.user_id)} ${verbFor(e)}`);
+    if (es.length > max) bits.push(`${es.length - max} more`);
+    return bits.join(", ");
+  }
+  function catOf(game) { return game && game.igdb_id != null ? idx.c[game.igdb_id] || null : null; }
+  function catRow(igdbId) { return idx.c[igdbId] || S.ext[igdbId] || null; }
+  function coverUrl(game, size) {
+    if (game.cover_url && /^https:\/\//i.test(game.cover_url)) return game.cover_url;
+    const c = catOf(game);
+    return c && c.cover_image_id ? IGDB_IMG(c.cover_image_id, size) : "";
+  }
+
+  // When a game comes out: { upcoming, precise, date, short } from a catalogue row. Null if unknown.
+  function releaseInfo(c) {
+    if (!c) return null;
+    const date = c.first_release_date || null, human = c.release_human || null;
+    if (!date && !human) return null;
+    if (date && date <= todayISO()) return { upcoming: false };
+    const precise = !!date && (!human || PRECISE_DAY.test(human));
+    return { upcoming: true, precise, date: precise ? date : null, short: precise ? fmtDay(date) : human || "TBA" };
+  }
+
+  // ---------------- Colour: tints taken from each game's cover ----------------
+  function hexToHsl(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+    if (!m) return null;
+    const n = parseInt(m[1], 16);
+    const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+    let h = 0, s = 0;
+    if (d) {
+      s = d / (1 - Math.abs(2 * l - 1));
+      h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h *= 60; if (h < 0) h += 360;
+    }
+    return [h, s, l];
+  }
+  const hsl = (h, s, l) => `hsl(${Math.round(h)}, ${Math.round(s * 100)}%, ${Math.round(l * 100)}%)`;
+  const tintCache = new Map();
+  // bg: dark panel behind a game (hero card, game page header). tile: cover placeholder. soft: readable text on either.
+  function tintFrom(color, key) {
+    const k = (color || "") + "|" + key;
+    if (tintCache.has(k)) return tintCache.get(k);
+    let h, s;
+    const p = hexToHsl(color);
+    if (p) { h = p[0]; s = p[1] < 0.1 ? 0.05 : Math.min(0.45, Math.max(0.2, p[1] * 0.7)); }
+    else { h = hash(String(key)) % 360; s = 0.22; }
+    const t = { bg: hsl(h, s, 0.19), tile: hsl(h, s, 0.25), soft: hsl(h, Math.min(0.55, s + 0.12), 0.84) };
+    tintCache.set(k, t);
+    return t;
+  }
+  function gameTint(g) { const c = catOf(g); return tintFrom(c && c.cover_color, g.igdb_id || g.id || g.title); }
+  function rowTint(r) { const c = catRow(r.igdb_id); return tintFrom((c && c.cover_color) || r.cover_color, r.igdb_id || r.name); }
 
   // ---------------- Building blocks ----------------
   function starSvg(cls) { return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${STAR_PATH}" fill="currentColor"/></svg>`; }
@@ -143,38 +232,25 @@
   }
   function avatar(id, cls = "") {
     const p = idx.p[id];
-    const col = PLASTIC[(p ? p.color : 3) % 8].c;
+    const col = AVATAR[((p ? p.color : 3) % 8 + 8) % 8];
     const letter = p ? (p.display_name.trim()[0] || "?").toUpperCase() : "?";
     return `<span class="avatar ${cls}" style="--c:${col}" aria-hidden="true">${esc(letter)}</span>`;
   }
-  function cartColors(game) {
-    const h = hash(String(game.id || game.title));
-    const pl = PLASTIC[h % 8];
-    const bandIdx = (h >>> 5) % 9;
-    return { c: pl.c, d: pl.d, band: bandIdx === 8 || bandIdx === h % 8 ? INK : PLASTIC[bandIdx].c };
+  // Cover tile: the box art when we have it, otherwise a tinted tile with the title.
+  function coverHTML({ title, url, tint, cls = "", badge = "" }) {
+    if (badge) cls += " has-badge";
+    return `<span class="cv ${cls}" style="--t:${tint.tile};--tm:${tint.soft}" aria-hidden="true">${url
+      ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span class="cv-t">${esc(title)}</span>${badge ? `<span class="badge">${esc(badge)}</span>` : ""}</span>`;
   }
-  function cart(game, opts = {}) {
-    const col = cartColors(game);
-    const pl = col, band = col.band;
-    const t = game.title || "";
-    const tk = t.length <= 6 ? 19 : t.length <= 10 ? 16 : t.length <= 16 ? 13.5 : t.length <= 26 ? 11.5 : 10;
-    const meta = [game.platform, game.year].filter(Boolean).join(" ");
-    const art = coverUrl(game, "t_cover_big");
-    const sticker = opts.sticker ? `<span class="sticker">${esc(opts.sticker)}</span>` : "";
-    return `<div class="cart${art ? " has-art" : ""}" style="--c:${pl.c};--c-dark:${pl.d};--band:${band};--tk:${tk}" aria-hidden="true">
-      <div class="label">
-        ${art ? `<img src="${esc(art)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.cart').classList.remove('has-art');this.remove()">` : ""}
-        <div class="label-title">${esc(t)}</div>
-        ${meta ? `<div class="label-meta">${esc(meta)}</div>` : ""}
-      </div>${sticker}</div>`;
+  function gameCover(g, opts = {}) {
+    return coverHTML({ title: g.title, url: coverUrl(g, opts.size || "cover_big"), tint: gameTint(g), cls: opts.cls, badge: opts.badge });
   }
-
-  function catOf(game) { return game && game.igdb_id != null ? idx.c[game.igdb_id] || null : null; }
-  function coverUrl(game, size) {
-    if (game.cover_url && /^https:\/\//i.test(game.cover_url)) return game.cover_url;
-    const c = catOf(game);
-    return c && c.cover_image_id ? IGDB_IMG(c.cover_image_id, size.replace(/^t_/, "")) : "";
+  function rowCover(r, opts = {}) {
+    const c = catRow(r.igdb_id);
+    const img = r.cover_image_id || (c && c.cover_image_id);
+    return coverHTML({ title: r.name, url: img ? IGDB_IMG(img, opts.size || "cover_big") : "", tint: rowTint(r), cls: opts.cls });
   }
+  function markHTML() { return `<div class="mark" aria-hidden="true"><i></i><i></i><i>${ICON.star}</i></div>`; }
   function spoilerText(e, cls) {
     if (!e.review) return "";
     if (e.spoiler && e.user_id !== S.me && !S.revealed.has(e.id)) {
@@ -250,13 +326,13 @@
     const key = ids.slice().sort((a, b) => a - b).join(",");
     if (S.similar && S.similar.key === key) return;
     const cached = safeJson(lsGet("sp-sim"));
-    if (cached && cached.key === key && Date.now() - cached.at < 864e5) { S.similar = cached; if (S.tab === "feed") renderMain(); return; }
+    if (cached && cached.key === key && Date.now() - cached.at < DAY_MS) { S.similar = cached; if (S.tab === "feed") safeRenderMain(); return; }
     similarLoading = true;
     try {
       const games = await S.api.catalogSimilar(ids);
       S.similar = { key, games, at: Date.now() };
       lsSet("sp-sim", JSON.stringify(S.similar));
-      if (S.tab === "feed" && !S.sheet) renderMain();
+      if (S.tab === "feed") safeRenderMain();
     } catch (_) { /* picks are a nice-to-have; stay quiet */ }
     finally { similarLoading = false; }
   }
@@ -285,19 +361,32 @@
     return p ? p.reason : "";
   }
 
+  // A light catalogue row we've seen somewhere (picks, Discover, search), for opening a game that isn't on the shelf.
+  function findRow(igdbId) {
+    const pools = [
+      S.similar && S.similar.games,
+      S.disc && S.disc.data && S.disc.data.trending,
+      S.disc && S.disc.data && S.disc.data.upcoming,
+      S.cat && S.cat.results,
+    ];
+    for (const list of pools) {
+      const r = (list || []).find((x) => x.igdb_id === igdbId);
+      if (r) return r;
+    }
+    const c = catRow(igdbId);
+    return c ? { igdb_id: c.igdb_id, name: c.name, cover_image_id: c.cover_image_id, platforms: c.platforms || [], year: c.first_release_date ? Number(c.first_release_date.slice(0, 4)) : null } : null;
+  }
+
   // ---------------- Screens: boot / auth ----------------
   const root = () => $("#app");
   const layer = () => $("#layer");
 
   function renderLoading() {
-    root().innerHTML = `<div class="loading" role="status" aria-label="Loading">${cart({ id: "load", title: "Save Point" })}</div>`;
+    root().innerHTML = `<div class="loading" role="status" aria-label="Loading">${markHTML()}</div>`;
   }
 
   function authShell(inner) {
-    root().innerHTML = `<main class="auth">
-      <div class="auth-carts">${cart({ id: "a1", title: "Save" })}${cart({ id: "a7", title: "Point" })}${cart({ id: "a4", title: "Play" })}</div>
-      ${inner}
-    </main>`;
+    root().innerHTML = `<main class="auth">${markHTML()}${inner}</main>`;
   }
 
   function renderNotConfigured() {
@@ -336,8 +425,6 @@
       </form>
       <p class="switch"><button data-act="sign-out">Sign out</button></p>`);
   }
-
-  function safeJson(s) { try { return JSON.parse(s); } catch (_) { return null; } }
 
   async function afterSignIn() {
     renderLoading();
@@ -378,18 +465,99 @@
     renderMain();
     refreshOpenSheet();
     loadSimilar();
+    maintainCatalog();
+    if (S.tab === "discover") loadDiscover();
   }
-  function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
+
+  const STEAM_KEYS = ["steam_desc", "steam_pct", "steam_total", "steam_players", "steam_fetched_at"];
+  function mergeCatalog(rows) {
+    (rows || []).forEach((r) => {
+      if (!r || !r.igdb_id) return;
+      const i = S.catalog.findIndex((x) => x.igdb_id === r.igdb_id);
+      if (i < 0) { S.catalog.push(r); return; }
+      const old = S.catalog[i], next = { ...old, ...r };
+      // Never let an older copy wipe Steam numbers we fetched more recently.
+      if (old.steam_fetched_at && (!r.steam_fetched_at || r.steam_fetched_at < old.steam_fetched_at)) STEAM_KEYS.forEach((k) => (next[k] = old[k]));
+      S.catalog[i] = next;
+    });
+    reindex();
+  }
+
+  // Keeps catalogue rows fresh: wishlist games that aren't out yet (release dates move), and covers without a tint colour.
+  let maintaining = false;
+  async function maintainCatalog() {
+    if (maintaining || !S.api || !S.api.catalogRefresh) return;
+    const ids = [];
+    S.games.forEach((g) => {
+      const c = catOf(g);
+      if (!c || S.refreshed.has(c.igdb_id)) return;
+      const age = c.fetched_at ? Date.now() - new Date(c.fetched_at).getTime() : Infinity;
+      const wanted = (idx.byGame[g.id] || []).some((e) => e.status === "want");
+      const rel = releaseInfo(c);
+      const upcoming = rel ? rel.upcoming : !c.first_release_date;
+      if ((wanted && upcoming && age > DAY_MS) || (c.cover_image_id && !c.cover_color)) ids.push(c.igdb_id);
+    });
+    if (!ids.length) return;
+    const batch = ids.slice(0, 25);
+    batch.forEach((i) => S.refreshed.add(i));
+    maintaining = true;
+    try {
+      mergeCatalog(await S.api.catalogRefresh(batch));
+      safeRenderMain();
+      refreshOpenSheet();
+    } catch (_) { /* try again next session */ }
+    finally { maintaining = false; }
+  }
+
+  // S35: Steam review score + players online, looked up when a game page opens (the server caches it for a day).
+  async function ensureSteam(igdbId) {
+    const c = catRow(igdbId);
+    if (!c || !c.steam_appid || !S.api.catalogSteam || S.steamTried.has(igdbId)) return;
+    if (c.steam_fetched_at && Date.now() - new Date(c.steam_fetched_at).getTime() < DAY_MS) return;
+    S.steamTried.add(igdbId); S.steamLoading.add(igdbId);
+    updatePageChips();
+    try {
+      const st = await S.api.catalogSteam(igdbId);
+      const live = catRow(igdbId) || c; // the row may have been replaced by a refresh while we waited
+      if (st) Object.assign(live, { steam_desc: st.desc, steam_pct: st.pct, steam_total: st.total, steam_players: st.players, steam_fetched_at: st.fetched_at || new Date().toISOString() });
+    } catch (_) { /* the chip just doesn't show */ }
+    S.steamLoading.delete(igdbId);
+    updatePageChips();
+  }
+
+  // S33/S34: trending + upcoming releases (server caches 6 hours, we keep a copy for 3).
+  let discLoading = false;
+  async function loadDiscover(force) {
+    if (!S.api || !S.api.catalogDiscover || discLoading) return;
+    if (!S.disc) {
+      const cached = safeJson(lsGet("sp-disc"));
+      if (cached && cached.data && cached.demo === !!S.api.demo) S.disc = cached;
+    }
+    if (!force && S.disc && S.disc.data && Date.now() - S.disc.at < 3 * 3600e3) return;
+    discLoading = true;
+    if (S.disc && S.disc.error) { S.disc = null; if (S.tab === "discover") safeRenderMain(); }
+    try {
+      const data = await S.api.catalogDiscover();
+      S.disc = { data, at: Date.now(), demo: !!S.api.demo };
+      lsSet("sp-disc", JSON.stringify(S.disc));
+    } catch (e) {
+      if (!S.disc || !S.disc.data) S.disc = { data: null, at: 0, error: e.message };
+    } finally {
+      discLoading = false;
+      if (S.tab === "discover") safeRenderMain();
+    }
+  }
 
   // ---------------- Main screens ----------------
+  const TABS = [
+    { id: "feed", label: "Feed" },
+    { id: "shelf", label: "Shelf" },
+    { id: "discover", label: "Discover" },
+    { id: "friends", label: "Friends" },
+  ];
   function renderMain() {
     const keepScroll = window.scrollY;
-    const tabs = [
-      { id: "feed", label: "Feed" },
-      { id: "shelf", label: "Shelf" },
-      { id: "friends", label: "Friends" },
-    ];
-    const body = S.tab === "shelf" ? shelfView() : S.tab === "friends" ? friendsView() : feedView();
+    const body = S.tab === "shelf" ? shelfView() : S.tab === "friends" ? friendsView() : S.tab === "discover" ? discoverView() : feedView();
     root().innerHTML = `
       <div class="ptr" id="ptr" aria-hidden="true"><span>Pull to refresh</span></div>
       <main class="screen" id="main">
@@ -397,34 +565,52 @@
         ${body}
       </main>
       <nav class="tabbar" aria-label="Sections"><div class="tabbar-inner">
-        ${tabs.map((t) => `<button data-act="tab" data-tab="${t.id}" ${S.tab === t.id ? 'aria-current="page"' : ""}>${ICON[t.id]}<span>${t.label}</span></button>`).join("")}
+        ${TABS.map((t) => `<button data-act="tab" data-tab="${t.id}" aria-label="${t.label}" ${S.tab === t.id ? 'aria-current="page"' : ""}>${ICON[t.id]}<span>${t.label}</span></button>`).join("")}
       </div></nav>`;
     window.scrollTo(0, keepScroll);
   }
+  // Re-render without yanking the keyboard away from someone typing in a search box.
+  function safeRenderMain() {
+    const a = document.activeElement;
+    if (a && a.closest && a.closest("#main") && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
+    renderMain();
+  }
 
-  function topbar(title) {
+  function topbar(title, add = true) {
     return `<header class="topbar"><h1 class="big-title">${esc(title)}</h1>
-      <button class="btn round" data-act="add-game" aria-label="Add a game">${ICON.plus}</button></header>`;
+      ${add ? `<button class="btn round" data-act="add-game" aria-label="Add a game">${ICON.plus}</button>` : ""}</header>`;
   }
 
   function feedView() {
     const playing = S.entries
       .filter((e) => e.status === "playing" && idx.g[e.game_id])
-      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-      .slice(0, 12);
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
     const items = S.entries
       .filter((e) => idx.g[e.game_id])
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
       .slice(0, 80);
 
-    const strip = playing.length
-      ? `<h2 class="section-title">Playing right now</h2>
-         <div class="now-playing">${playing.map((e) => `
-           <button class="np" data-act="open-game" data-id="${e.game_id}" aria-label="${esc(nameOf(e.user_id))} is playing ${esc(idx.g[e.game_id].title)}">
-             ${cart(idx.g[e.game_id])}
-             <div class="np-who">${avatar(e.user_id, "sm")}<span>${esc(nameOf(e.user_id))}</span></div>
-           </button>`).join("")}</div>`
-      : "";
+    let top = "";
+    if (playing.length) {
+      const h = playing[0], g = idx.g[h.game_id], t = gameTint(g);
+      const bits = [];
+      if (h.hours) bits.push(`${fmtHours(h.hours)} so far`);
+      if (h.started_at) bits.push(`started ${since(h.started_at)}`);
+      const who = h.user_id === S.me ? "You're playing" : `${nameOf(h.user_id)} is playing`;
+      top = `<button class="hero" style="--hb:${t.bg};--hm:${t.soft}" data-act="open-game" data-id="${g.id}" aria-label="${esc(who)} ${esc(g.title)}">
+          ${gameCover(g)}
+          <span class="hero-text"><span><span class="hero-who">${avatar(h.user_id, "sm")}${esc(who)}</span><b class="hero-title">${esc(g.title)}</b></span>
+          <span class="hero-meta">${esc(bits.join(", ") || "Just started")}</span></span>
+        </button>`;
+      const rest = playing.slice(1, 5);
+      if (rest.length) {
+        top += `<div class="also">${rest.map((e) => {
+          const g2 = idx.g[e.game_id];
+          return `<button data-act="open-game" data-id="${g2.id}" aria-label="${esc(nameOf(e.user_id))}: ${esc(g2.title)}">${gameCover(g2, { cls: "sm" })}
+            <span class="also-text"><b>${esc(nameOf(e.user_id))}</b><span>${esc(g2.title)}</span></span></button>`;
+        }).join("")}</div>`;
+      }
+    }
 
     const isNew = (e) => S.seenAt && e.user_id !== S.me && e.updated_at > S.seenAt;
     const newCount = items.filter(isNew).length;
@@ -438,55 +624,50 @@
       rows += feedItem(e, isNew(e));
     });
     const list = items.length
-      ? `<h2 class="section-title">Latest${newCount ? ` <span class="new-count">${newCount} new</span>` : ""}</h2><ul class="feed">${rows}</ul>`
+      ? `<section class="section"><h2 class="section-title">Latest${newCount ? ` <span class="new-count">${newCount} new</span>` : ""}</h2><ul class="feed">${rows}</ul></section>`
       : emptyState("Nothing logged yet", "Add a game you're playing and it'll show up here for everyone.", "Add a game");
 
     const picks = picksFor();
     const myRated = S.entries.filter((e) => e.user_id === S.me && e.rating != null).length;
     const picksHTML = picks.length
-      ? `<h2 class="section-title">Picks for you</h2>
-         <div class="now-playing picks">${picks.map(pickCard).join("")}</div>`
+      ? `<section class="section"><h2 class="section-title">Picked for you</h2><div class="rail">${picks.map(pickCard).join("")}</div></section>`
       : S.entries.some((e) => e.user_id === S.me) && myRated < 2
-        ? `<p class="nudge">Rate a couple of games and you'll get picks here, based on your friends' ratings and games like the ones you love.</p>` : "";
+        ? `<section class="section"><p class="nudge">Rate a couple of games and you'll get picks here, based on your friends' ratings and games like the ones you love.</p></section>` : "";
 
-    return topbar("Feed") + strip + picksHTML + list;
+    return topbar("Feed") + top + picksHTML + list;
   }
 
   function pickCard(p) {
     if (p.kind === "friend") {
-      return `<button class="np pick" data-act="open-game" data-id="${p.game.id}" aria-label="${esc(p.game.title)}: ${esc(p.reason)}">
-        ${cart(p.game)}
-        <div class="pick-title">${esc(p.game.title)}</div>
-        <div class="pick-why">${esc(p.reason)}</div>
+      return `<button class="rail-item" data-act="open-game" data-id="${p.game.id}" aria-label="${esc(p.game.title)}: ${esc(p.reason)}">
+        ${gameCover(p.game)}
+        <div class="rail-title">${esc(p.game.title)}</div>
+        <div class="rail-why">${esc(p.reason)}</div>
       </button>`;
     }
     const r = p.row;
-    const fake = { id: "igdb" + r.igdb_id, title: r.name, year: r.year, cover_url: r.cover_image_id ? IGDB_IMG(r.cover_image_id, "cover_big") : null };
-    return `<button class="np pick" data-act="pick-external" data-igdb="${r.igdb_id}" aria-label="${esc(r.name)}: ${esc(p.reason)}">
-      ${cart(fake)}
-      <div class="pick-title">${esc(r.name)}</div>
-      <div class="pick-why">${esc(p.reason)}</div>
+    return `<button class="rail-item" data-act="open-row" data-igdb="${r.igdb_id}" data-why="${esc(p.reason)}" aria-label="${esc(r.name)}: ${esc(p.reason)}">
+      ${rowCover(r)}
+      <div class="rail-title">${esc(r.name)}</div>
+      <div class="rail-why">${esc(p.reason)}</div>
     </button>`;
   }
 
   function feedItem(e, fresh) {
     const g = idx.g[e.game_id];
-    const who = nameOf(e.user_id);
-    const verb = e.user_id === S.me ? { want: "want to play", playing: "are playing" }[e.status] || VERB[e.status] : VERB[e.status];
     const t = e.status === "finished" ? took(e) : "";
     return `<li class="feed-item${fresh ? " is-new" : ""}">
-      ${avatar(e.user_id)}
+      <button class="thumb" data-act="open-game" data-id="${g.id}" aria-label="Open ${esc(g.title)}">${gameCover(g, { cls: "sm" })}</button>
       <div>
-        <div class="what"><b>${esc(who)}</b> ${verb} <button class="link-btn" data-act="open-game" data-id="${g.id}">${esc(g.title)}</button></div>
-        <div class="when">${e.rating != null ? stars(e.rating, 13) + " " : ""}${ago(e.updated_at)}${e.hours ? ", " + fmtHours(e.hours) + " played" : ""}${t ? ", " + t : ""}</div>
+        <div class="what"><b>${esc(nameOf(e.user_id))}</b> ${verbFor(e)} <button class="link-btn" data-act="open-game" data-id="${g.id}">${esc(g.title)}</button></div>
+        <div class="when">${e.rating != null ? stars(e.rating, 12) + " " : ""}${ago(e.updated_at)}${e.hours ? ", " + fmtHours(e.hours) + " played" : ""}${t ? ", " + t : ""}</div>
         ${spoilerText(e, "quote")}
       </div>
-      <button class="thumb" data-act="open-game" data-id="${g.id}" aria-label="Open ${esc(g.title)}">${cart(g)}</button>
     </li>`;
   }
 
   function emptyState(title, body, cta) {
-    return `<div class="empty">${cart({ id: "empty", title: "?" })}<h3>${esc(title)}</h3><p>${esc(body)}</p>
+    return `<div class="empty">${markHTML()}<h3>${esc(title)}</h3><p>${esc(body)}</p>
       ${cta ? `<button class="btn" data-act="add-game">${esc(cta)}</button>` : ""}</div>`;
   }
 
@@ -549,17 +730,157 @@
   function shelfTile(g, mine) {
     const me = myEntry(g.id);
     const sc = groupScore(g.id);
-    const sticker = me ? STATUS_LABEL[me.status] : "";
+    const badge = me && !(mine && S.status !== "all") ? STATUS_LABEL[me.status] : "";
     const meta = sc
-      ? `${stars(sc.avg, 12)}<span>${fmtRating(Math.round(sc.avg * 10) / 10)}</span>`
+      ? `${stars(sc.avg, 11)}<span>${fmtRating(round1(sc.avg))}</span>`
       : `<span>${(idx.byGame[g.id] || []).length ? "No ratings yet" : "Nobody's logged it"}</span>`;
     const quick = mine && me && me.status === "playing"
       ? `<button type="button" class="quick" data-act="quick-hours" data-id="${g.id}" data-delta="1" aria-label="Add 1 hour to ${esc(g.title)}">+1h</button>` : "";
     return `<div class="tile-wrap"><button class="tile" data-act="open-game" data-id="${g.id}">
-      ${cart(g, { sticker: mine && S.status !== "all" ? "" : sticker })}
+      ${gameCover(g, { badge })}
       <div class="tile-title">${esc(g.title)}</div>
       <div class="tile-meta">${meta}</div>
     </button>${quick}</div>`;
+  }
+
+  // ---------------- Discover (S33 trending, S34 calendar) ----------------
+  function discoverView() {
+    const seg = `<div class="seg" role="group" aria-label="Discover">
+        <button data-act="disc-view" data-v="trending" aria-pressed="${S.discView === "trending"}">Trending</button>
+        <button data-act="disc-view" data-v="calendar" aria-pressed="${S.discView === "calendar"}">Calendar</button>
+      </div>`;
+    const d = S.disc && S.disc.data;
+    let body;
+    if (!S.api.catalogDiscover) body = `<p class="nudge">Discover needs the games database, which this copy isn't connected to.</p>`;
+    else if (S.discView === "calendar") body = calendarHTML(d);
+    else if (d) body = trendingHTML(d);
+    else if (S.disc && S.disc.error) body = discError();
+    else body = skeleton();
+    return topbar("Discover", false) + seg + body + `<p class="credit">Game data from IGDB. Player counts and review scores from Steam.</p>`;
+  }
+  function discError() {
+    return `<div class="empty"><h3>Can't load Discover</h3><p>${esc(S.disc.error)}</p><button class="btn secondary" data-act="disc-retry">Try again</button></div>`;
+  }
+  function skeleton() {
+    return `<div role="status" aria-label="Loading">${Array.from({ length: 6 }, () => `<div class="skel"><i></i><i></i><i></i></div>`).join("")}</div>`;
+  }
+  function wantButton(igdbId, name) {
+    const shelf = idx.byIgdb[igdbId];
+    const mine = shelf && myEntry(shelf.id);
+    if (mine) return `<button class="want-btn" data-act="open-row" data-igdb="${igdbId}" aria-pressed="true" aria-label="${esc(name)} is on your shelf (${esc(STATUS_LABEL[mine.status])})">${ICON.check}</button>`;
+    return `<button class="want-btn" data-act="quick-want" data-igdb="${igdbId}" aria-pressed="false" aria-label="Add ${esc(name)} to Want to play">${ICON.plus}</button>`;
+  }
+  function trendingHTML(d) {
+    const items = d.trending || [];
+    const note = d.has_history
+      ? "What's taking off this week on Steam and Twitch."
+      : "What's popular right now. Weekly surges show up once we've tracked a week of numbers.";
+    if (!items.length) return `<p class="nudge">Nothing to show yet. Check back later.</p>`;
+    return `<p class="disc-note">${note}</p><ol class="trend">${items.map((r, i) => {
+      const shelf = idx.byIgdb[r.igdb_id];
+      const line = shelf ? groupLine(shelf.id) : "";
+      const meta = [r.year, (r.platforms || []).slice(0, 3).join(", ")].filter(Boolean).join(" · ");
+      return `<li><span class="rank">${i + 1}</span>
+        <button class="open" data-act="open-row" data-igdb="${r.igdb_id}">${rowCover(r)}<span class="t-text"><b>${esc(r.name)}</b>
+          <span class="t-meta">${esc(meta)}</span><span class="reason${/^\+/.test(r.reason) ? " hot" : ""}">${esc(r.reason)}</span>${line ? `<span class="t-status">${esc(line)}</span>` : ""}</span></button>
+        ${wantButton(r.igdb_id, r.name)}</li>`;
+    }).join("")}</ol>`;
+  }
+
+  function platKinds(list) {
+    const k = new Set();
+    (list || []).forEach((p) => {
+      const s = String(p);
+      if (/^(PC|Mac|Linux|Win)/i.test(s)) k.add("pc");
+      else if (/^(PS|PlayStation)/i.test(s)) k.add("ps");
+      else if (/(XSX|XONE|X360|Xbox|Series)/i.test(s)) k.add("xbox");
+      else if (/(Switch|NSW|NS2)/i.test(s)) k.add("switch");
+    });
+    return k;
+  }
+
+  // Everything coming out: wishlist games on the shelf (yours and friends'), plus the big upcoming releases.
+  function calendarItems(d) {
+    const map = new Map();
+    S.games.forEach((g) => {
+      const c = catOf(g);
+      if (!c) return;
+      const wants = (idx.byGame[g.id] || []).filter((e) => e.status === "want");
+      if (!wants.length) return;
+      const rel = releaseInfo(c);
+      if (!rel || !rel.upcoming) return;
+      map.set(c.igdb_id, {
+        igdb_id: c.igdb_id, name: g.title, cover_image_id: c.cover_image_id, platforms: c.platforms || [],
+        date: rel.date, human: rel.short, mine: wants.some((e) => e.user_id === S.me),
+        wanters: wants.filter((e) => e.user_id !== S.me).map((e) => e.user_id),
+      });
+    });
+    ((d && d.upcoming) || []).forEach((u) => {
+      const precise = !!u.date && (!u.human || PRECISE_DAY.test(u.human));
+      const ex = map.get(u.igdb_id);
+      if (ex) { if (!ex.date && precise) { ex.date = u.date; ex.human = fmtDay(u.date); } return; }
+      map.set(u.igdb_id, { ...u, date: precise ? u.date : null, human: precise ? fmtDay(u.date) : u.human || "TBA", mine: false, wanters: [], big: true });
+    });
+    const today = todayISO();
+    return [...map.values()].filter((it) => !it.date || it.date >= today);
+  }
+
+  function calendarHTML(d) {
+    const today = todayISO();
+    const all = calendarItems(d);
+    const listed = (it) => it.mine || it.wanters.length;
+    const items = all.filter((it) => S.plat === "all" || listed(it) || platKinds(it.platforms).has(S.plat));
+    const mine = all.filter((it) => it.mine);
+    const nextMine = mine.filter((it) => it.date).sort((a, b) => a.date.localeCompare(b.date))[0];
+
+    let summary;
+    if (mine.length) {
+      const n = daysUntil(nextMine ? nextMine.date : today);
+      summary = `<b>${mine.length} ${mine.length === 1 ? "game" : "games"}</b> on your Want to play list ${mine.length === 1 ? "isn't" : "aren't"} out yet.` +
+        (nextMine ? ` Next up: <b>${esc(nextMine.name)}</b>, ${esc(fmtDay(nextMine.date))} (${n === 0 ? "today" : n === 1 ? "tomorrow" : `in ${n} days`}).` : "");
+    } else {
+      summary = "Games on your Want to play list show up here with their release dates. Tap + on anything coming up to add it.";
+    }
+    const filters = `<div class="chips" role="group" aria-label="Platform">${PLAT_FILTERS.map((p) =>
+      `<button class="chip" data-act="plat" data-p="${p.id}" aria-pressed="${S.plat === p.id}">${p.label}</button>`).join("")}</div>`;
+
+    const dated = items.filter((it) => it.date).sort((a, b) => a.date.localeCompare(b.date) || (listed(b) ? 1 : 0) - (listed(a) ? 1 : 0));
+    const later = items.filter((it) => !it.date).sort((a, b) => (listed(b) ? 1 : 0) - (listed(a) ? 1 : 0) || String(a.human).localeCompare(String(b.human)));
+    const weekEnd = addDays(today, 6);
+    const groups = [];
+    const push = (key, label, it) => { let gr = groups.find((x) => x.key === key); if (!gr) groups.push(gr = { key, label, items: [] }); gr.items.push(it); };
+    dated.forEach((it) => {
+      if (it.date <= weekEnd) return push("week", "This week", it);
+      const dt = parseDay(it.date);
+      const label = dt.toLocaleDateString(undefined, { month: "long", year: dt.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+      push(it.date.slice(0, 7), label, it);
+    });
+    if (later.length) groups.push({ key: "later", label: "Later, or no date yet", items: later });
+
+    const loadingBig = !d && !(S.disc && S.disc.error);
+    const body = groups.length
+      ? groups.map((gr) => `<section class="cal-group"><h3>${esc(gr.label)}</h3><ul class="cal-list">${gr.items.map(calRow).join("")}</ul></section>`).join("")
+      : loadingBig ? "" : `<p class="nudge">No releases match this filter.</p>`;
+    return `<div class="cal-summary">${summary}</div>${filters}${body}${loadingBig ? skeleton() : ""}${S.disc && S.disc.error && !d ? discError() : ""}`;
+  }
+
+  function calRow(it) {
+    const plats = (it.platforms || []).slice(0, 4).join(", ");
+    let day;
+    if (it.date) {
+      const dt = parseDay(it.date);
+      day = `<span class="day"><b>${dt.getDate()}</b><span>${esc(dt.toLocaleDateString(undefined, { weekday: "short" }))}</span></span>`;
+    } else day = `<span class="day when">${esc(it.human || "TBA")}</span>`;
+    let flag = "";
+    if (it.mine) flag = `<span class="flag">On your list</span>`;
+    else if (it.wanters.length) {
+      const names = it.wanters.map(nameOf);
+      flag = `<span class="flag friend">${esc(names.slice(0, 2).join(" and "))}${names.length > 2 ? " and others" : ""} ${names.length === 1 ? "wants" : "want"} it</span>`;
+    }
+    return `<li class="${it.mine ? "mine" : ""}">${day}
+      <button class="open" data-act="open-row" data-igdb="${it.igdb_id}">${rowCover(it, { cls: "sm" })}<span class="t-text"><b>${esc(it.name)}</b>
+        ${plats ? `<span class="t-meta">${esc(plats)}</span>` : ""}${flag}</span></button>
+      ${wantButton(it.igdb_id, it.name)}</li>`;
   }
 
   function friendStats(id) {
@@ -592,7 +913,7 @@
     }).join("");
 
     const shareUrl = location.origin + location.pathname;
-    return `<header class="topbar"><h1 class="big-title">Friends</h1></header>
+    return topbar("Friends", false) + `
       ${list}
       <section class="panel" aria-labelledby="you-h">
         <h2 class="section-title" id="you-h">Your profile</h2>
@@ -600,7 +921,7 @@
           <label class="field"><span>Name</span><input class="input" name="name" maxlength="40" value="${esc(meP.display_name)}" autocomplete="nickname"></label>
           <div class="field"><span>Colour</span>
             <div class="swatches" role="group" aria-label="Profile colour">
-              ${PLASTIC.map((pc, i) => `<button type="button" class="swatch" style="--c:${pc.c}" data-act="color" data-color="${i}" aria-pressed="${meP.color === i}" aria-label="Colour ${i + 1}"></button>`).join("")}
+              ${AVATAR.map((c, i) => `<button type="button" class="swatch" style="--c:${c}" data-act="color" data-color="${i}" aria-pressed="${meP.color === i}" aria-label="Colour ${i + 1}"></button>`).join("")}
             </div></div>
           <button class="btn secondary" type="submit">Save name</button>
         </form>
@@ -617,26 +938,40 @@
       </section>`;
   }
 
-  // ---------------- Sheets ----------------
-  function openSheet(sheet) {
+  // ---------------- Sheets & pages ----------------
+  // push: remember the current sheet so Back returns to it (e.g. friend > game, game > share).
+  function openSheet(sheet, push) {
+    S.back = push && S.sheet ? S.sheet : null;
+    if (S.share && sheet.kind !== "share") { try { if (S.share.url) URL.revokeObjectURL(S.share.url); } catch (_) {} S.share = null; }
     S.sheet = sheet;
     renderSheet();
+    if (sheet.kind === "game") { const g = idx.g[sheet.id]; if (g && g.igdb_id != null) ensureSteam(g.igdb_id); }
+    if (sheet.kind === "ext") loadExt(sheet);
   }
   function closeSheet() {
     if (S.share && S.share.url) { try { URL.revokeObjectURL(S.share.url); } catch (_) {} }
     S.share = null;
-    S.sheet = null; S.draft = null;
+    S.sheet = null; S.draft = null; S.back = null;
     layer().innerHTML = "";
     document.body.style.overflow = "";
+  }
+  function goBack() {
+    if (!S.back) return closeSheet();
+    const b = S.back;
+    S.back = null; S.draft = null;
+    openSheet(b, false);
   }
   function refreshOpenSheet() {
     if (!S.sheet) return;
     if (S.sheet.kind === "game") {
       if (!idx.g[S.sheet.id]) return closeSheet();
       const box = $("#others"); if (box) box.innerHTML = othersReviews(S.sheet.id);
-      const sc = $("#score"); if (sc) sc.outerHTML = scoreHTML(S.sheet.id);
+      updatePageChips();
       const sess = $("#sessions"); const mine = myEntry(S.sheet.id);
       if (sess && mine && mine.status !== "want") sess.innerHTML = sessionsHTML(mine);
+    } else if (S.sheet.kind === "ext") {
+      const g = idx.byIgdb[S.sheet.igdb];
+      if (g) { S.draft = null; openSheet({ kind: "game", id: g.id }, false); }
     } else if (S.sheet.kind === "friend") {
       renderSheet();
     }
@@ -649,11 +984,23 @@
         ${inner}
       </div></div>`;
   }
+  function pageFrame(label, head, body) {
+    return `<div class="page" role="dialog" aria-modal="true" aria-label="${esc(label)}"><div class="page-inner">${head}<div class="g-body">${body}</div></div></div>`;
+  }
+  function pageHead({ title, cover, tint, meta, chips, right }) {
+    return `<header class="g-head" style="--hb:${tint.bg};--hm:${tint.soft}">
+      <div class="g-nav"><button class="btn round glass" data-act="close" aria-label="Back">${ICON.back}</button>${right || ""}</div>
+      ${cover}
+      <div><h1>${esc(title)}</h1>${meta ? `<div class="g-meta">${esc(meta)}</div>` : ""}</div>
+      <div id="chips">${chips}</div>
+    </header>`;
+  }
   function renderSheet() {
     const sh = S.sheet;
     if (!sh) return;
     let html = "";
-    if (sh.kind === "game") html = gameSheet(sh.id);
+    if (sh.kind === "game") html = gamePage(sh.id);
+    else if (sh.kind === "ext") html = extPage(sh);
     else if (sh.kind === "add") html = addSheet(sh);
     else if (sh.kind === "edit") html = editSheet(sh.id);
     else if (sh.kind === "friend") html = friendSheet(sh.id);
@@ -661,26 +1008,52 @@
     else if (sh.kind === "share") html = shareSheet(sh.id);
     layer().innerHTML = html;
     document.body.style.overflow = "hidden";
-    const first = $(".sheet [autofocus]");
+    const first = $("#layer [autofocus]");
     if (first && !matchMedia("(pointer: coarse)").matches) first.focus();
   }
+  function scroller() { return $(".page") || $(".sheet"); }
+  function rerenderKeepScroll() {
+    const el = scroller();
+    const top = el ? el.scrollTop : 0;
+    renderSheet();
+    const el2 = scroller(); if (el2) el2.scrollTop = top;
+  }
 
-  function scoreHTML(id) {
-    const sc = groupScore(id);
-    const c = catOf(idx.g[id]);
-    const critics = c && c.critic_score != null
-      ? `<div class="critics"><b>${Math.round(c.critic_score)}</b> Critics${c.critic_count ? ` (${c.critic_count} ${c.critic_count === 1 ? "review" : "reviews"})` : ""}</div>` : "";
-    return `<div id="score"><div class="score">${sc
-      ? `<strong>${fmtRating(Math.round(sc.avg * 10) / 10)}</strong>${stars(sc.avg, 16)}<span>from ${sc.n} ${sc.n === 1 ? "friend" : "friends"}</span>`
-      : `<span>No friend ratings yet</span>`}</div>${critics}</div>`;
+  // Score chips on a game page: friends, critics, Steam, release date.
+  function scoreChips(c, sc) {
+    const chip = (big, label) => `<div class="score-chip"><b>${esc(big)}</b><span>${esc(label)}</span></div>`;
+    const out = [];
+    if (sc) out.push(chip(fmtRating(round1(sc.avg)), sc.n === 1 ? "1 friend" : `${sc.n} friends`));
+    if (c && c.critic_score != null) out.push(chip(String(Math.round(c.critic_score)), "Critics"));
+    if (c && c.steam_pct != null && c.steam_total) out.push(chip(c.steam_pct + "%", "Steam" + (c.steam_desc ? ", " + c.steam_desc : "")));
+    else if (c && S.steamLoading.has(c.igdb_id)) out.push(`<div class="score-chip loading" role="status"><b>…</b><span>Steam</span></div>`);
+    const rel = releaseInfo(c);
+    if (rel && rel.upcoming) out.push(chip(rel.short, rel.precise && daysUntil(rel.date) <= 60 ? `Out in ${daysUntil(rel.date)} ${daysUntil(rel.date) === 1 ? "day" : "days"}` : "Release"));
+    let html = out.length ? `<div class="scores">${out.join("")}</div>` : "";
+    if (c && c.steam_players > 0) html += `<p class="players">${fmtNum(c.steam_players)} playing on Steam right now</p>`;
+    return html;
+  }
+  function updatePageChips() {
+    const box = $("#chips");
+    if (!box || !S.sheet) return;
+    if (S.sheet.kind === "game") box.innerHTML = scoreChips(catOf(idx.g[S.sheet.id]), groupScore(S.sheet.id));
+    else if (S.sheet.kind === "ext") box.innerHTML = scoreChips(catRow(S.sheet.igdb), null);
+  }
+  function aboutHTML(c) {
+    if (!c) return "";
+    return `<section class="about">
+      ${c.genres && c.genres.length ? `<div class="genres">${c.genres.slice(0, 4).map((x) => `<span>${esc(x)}</span>`).join("")}</div>` : ""}
+      ${c.summary ? `<p class="summary" id="summary">${esc(c.summary)}</p><button type="button" class="btn ghost more" data-act="more">More</button>` : ""}
+      <p class="credit">Game data from IGDB${c.igdb_url ? `. <a href="${esc(c.igdb_url)}" target="_blank" rel="noopener">View on IGDB</a>` : ""}${c.steam_appid ? `. <a href="https://store.steampowered.com/app/${esc(c.steam_appid)}" target="_blank" rel="noopener">Steam page</a>` : ""}</p>
+    </section>`;
   }
   function sessionsHTML(mine) {
     return `<div class="sessions"><span>Log a session</span>${SESSION_STEPS.map((h) =>
       `<button type="button" class="chip" data-act="quick-hours" data-id="${mine.game_id}" data-delta="${h}">+${h < 1 ? "30m" : h + "h"}</button>`).join("")}
-      <span class="subtle small">${mine.hours ? fmtHours(mine.hours) + " total" : ""}</span></div>`;
+      <span class="total">${mine.hours ? fmtHours(mine.hours) + " total" : ""}</span></div>`;
   }
 
-  function gameSheet(id) {
+  function gamePage(id) {
     const g = idx.g[id];
     if (!g) return "";
     const mine = myEntry(id);
@@ -694,52 +1067,131 @@
     }
     const d = S.draft;
     const c = catOf(g);
-    const facts = [g.platform, g.year].filter(Boolean).join(", ");
+    const year = g.year || (c && c.first_release_date ? c.first_release_date.slice(0, 4) : "");
+    const plats = g.platform || (c && c.platforms ? c.platforms.slice(0, 3).join(", ") : "");
+    const meta = [year, c && c.genres && c.genres[0], plats].filter(Boolean).join(", ");
+    const canShare = mine && (mine.rating != null || mine.review || mine.status === "finished");
+    const head = pageHead({
+      title: g.title, cover: gameCover(g, { size: "cover_big_2x" }), tint: gameTint(g), meta,
+      chips: scoreChips(c, groupScore(id)),
+      right: canShare ? `<button class="btn round glass" data-act="share-open" data-id="${id}" aria-label="Share my review">${ICON.share}</button>` : "",
+    });
     const showDates = d.started_at || d.finished_at || (mine && mine.status !== "want");
-    return sheetFrame("", `
-      <div class="game-hero">${cart(g)}<div>
-        <h1>${esc(g.title)}</h1>
-        <div class="facts">${esc(facts)}${facts ? "<br>" : ""}Added by ${esc(nameOf(g.added_by))}</div>
-        ${scoreHTML(id)}
-      </div></div>
-      ${c ? `<div class="about">
-        ${c.genres && c.genres.length ? `<div class="genres">${c.genres.slice(0, 4).map((x) => `<span>${esc(x)}</span>`).join("")}</div>` : ""}
-        ${c.summary ? `<p class="summary" id="summary">${esc(c.summary)}</p><button type="button" class="btn ghost more" data-act="more">More</button>` : ""}
-        <p class="credit">Game data from IGDB${c.igdb_url ? `. <a href="${esc(c.igdb_url)}" target="_blank" rel="noopener">View on IGDB</a>` : ""}</p>
-      </div>` : ""}
+    const body = `
       ${!mine && pickReason(id) ? `<p class="why">Picked for you: ${esc(pickReason(id))}</p>` : ""}
-      ${mine && mine.status !== "want" ? `<div id="sessions">${sessionsHTML(mine)}</div>` : ""}
-
-      <form data-form="entry" data-id="${id}">
-        <h2 class="section-title">${mine ? "Your log" : "Log it"}</h2>
-        <div class="status-pick" role="group" aria-label="Status">
-          ${STATUSES.map((s) => `<button type="button" data-act="pick-status" data-status="${s.id}" aria-pressed="${d.status === s.id}">${s.label}</button>`).join("")}
+      <section class="card">
+        <form data-form="entry" data-id="${id}">
+          <div class="card-head"><h2>${mine ? "Your log" : "Log it"}</h2>${mine ? `<span class="subtle small">Updated ${esc(ago(mine.updated_at))}</span>` : ""}</div>
+          <div class="status-pick" role="group" aria-label="Status">
+            ${STATUSES.map((s) => `<button type="button" data-act="pick-status" data-status="${s.id}" aria-pressed="${d.status === s.id}">${s.label}</button>`).join("")}
+          </div>
+          ${mine && mine.status !== "want" ? `<div id="sessions">${sessionsHTML(mine)}</div>` : ""}
+          <div class="field"><span>Your rating</span>
+            <div class="star-input" role="group" aria-label="Rating">${starInput(d.rating)}
+              ${d.rating != null ? `<button type="button" class="btn ghost clear" data-act="clear-rating">Clear</button>` : ""}</div>
+            <div class="rating-readout">${d.rating != null ? `${fmtRating(d.rating)} out of 5` : "Tap a star. Tap its left half for a half star."}</div>
+          </div>
+          <label class="field"><span>Hours played</span><input class="input" name="hours" type="number" inputmode="decimal" min="0" step="0.5" value="${d.hours == null ? "" : d.hours}" placeholder="Optional"></label>
+          <label class="field"><span>Review</span><textarea class="input" name="review" maxlength="5000" placeholder="What did you think? Optional.">${esc(d.review)}</textarea></label>
+          <label class="check"><input type="checkbox" name="spoiler" ${d.spoiler ? "checked" : ""}> <span>Contains spoilers. Friends tap to read it.</span></label>
+          ${showDates ? `<div class="row">
+            <label class="field"><span>Started</span><input class="input" type="date" name="started_at" value="${dateInput(d.started_at)}"></label>
+            <label class="field"><span>Finished</span><input class="input" type="date" name="finished_at" value="${dateInput(d.finished_at)}"></label>
+          </div>` : ""}
+          <p class="error" role="alert"></p>
+          <button class="btn block" type="submit">${mine ? "Save changes" : "Add to my shelf"}</button>
+        </form>
+      </section>
+      ${aboutHTML(c)}
+      <section><h2 class="section-title">Friends</h2><div id="others">${othersReviews(id)}</div></section>
+      <div class="page-actions">
+        ${canShare ? `<button type="button" class="btn secondary block" data-act="share-open" data-id="${id}">Share my review as an image</button>` : ""}
+        <div class="row">
+          <button class="btn secondary" data-act="edit-game" data-id="${id}">Edit details</button>
+          ${g.added_by === S.me ? `<button class="btn secondary" style="color:var(--danger)" data-act="delete-game" data-id="${id}">Delete game</button>` : ""}
         </div>
-        <div class="field"><span>Your rating</span>
-          <div class="star-input" role="group" aria-label="Rating">${starInput(d.rating)}
-            ${d.rating != null ? `<button type="button" class="btn ghost clear" data-act="clear-rating">Clear</button>` : ""}</div>
-          <div class="rating-readout">${d.rating != null ? `${fmtRating(d.rating)} out of 5` : "Tap a star. Tap its left half for a half star."}</div>
-        </div>
-        <label class="field"><span>Hours played</span><input class="input" name="hours" type="number" inputmode="decimal" min="0" step="0.5" value="${d.hours == null ? "" : d.hours}" placeholder="Optional"></label>
-        <label class="field"><span>Review</span><textarea class="input" name="review" maxlength="5000" placeholder="What did you think? Optional.">${esc(d.review)}</textarea></label>
-        <label class="check"><input type="checkbox" name="spoiler" ${d.spoiler ? "checked" : ""}> <span>Contains spoilers. Friends tap to read it.</span></label>
-        ${showDates ? `<div class="row">
-          <label class="field"><span>Started</span><input class="input" type="date" name="started_at" value="${dateInput(d.started_at)}"></label>
-          <label class="field"><span>Finished</span><input class="input" type="date" name="finished_at" value="${dateInput(d.finished_at)}"></label>
-        </div>` : ""}
-        <p class="error" role="alert"></p>
-        <button class="btn block" type="submit">${mine ? "Save changes" : "Add to my shelf"}</button>
-        ${mine && (mine.rating != null || mine.review || mine.status === "finished") ? `<button type="button" class="btn secondary block share-btn" data-act="share-open" data-id="${id}">Share my review as an image</button>` : ""}
         ${mine ? `<button type="button" class="btn danger block" data-act="remove-entry" data-id="${mine.id}">Remove from my shelf</button>` : ""}
-      </form>
+      </div>`;
+    return pageFrame(g.title, head, body);
+  }
 
-      <h2 class="section-title" style="margin-top:30px">Friends</h2>
-      <div id="others">${othersReviews(id)}</div>
+  // A game from Discover or picks that isn't on the shelf yet.
+  function extPage(sh) {
+    const id = sh.igdb;
+    const full = catRow(id);
+    const r = full || sh.row || { name: "Game" };
+    const name = r.name || "Game";
+    const img = r.cover_image_id;
+    const year = full && full.first_release_date ? full.first_release_date.slice(0, 4) : r.year;
+    const meta = [year, full && full.genres && full.genres[0], (r.platforms || []).slice(0, 3).join(", ")].filter(Boolean).join(", ");
+    const head = pageHead({
+      title: name, tint: tintFrom(full && full.cover_color, id), meta,
+      cover: coverHTML({ title: name, url: img ? IGDB_IMG(img, "cover_big_2x") : "", tint: tintFrom(full && full.cover_color, id) }),
+      chips: full ? scoreChips(full, null) : r.critic_score != null ? scoreChips({ critic_score: r.critic_score }, null) : "",
+    });
+    const rel = releaseInfo(full);
+    const upcoming = rel && rel.upcoming;
+    const body = `
+      ${sh.why ? `<p class="why">${esc(sh.why)}</p>` : ""}
+      <section class="card">
+        <div class="card-head"><h2>Add to your shelf</h2></div>
+        <div class="ext-actions">
+          <button class="btn block" data-act="ext-add" data-status="want">Want to play</button>
+          ${upcoming ? "" : `<div class="row"><button class="btn secondary" data-act="ext-add" data-status="playing">Playing</button><button class="btn secondary" data-act="ext-add" data-status="finished">Finished</button></div>`}
+          <button class="btn ghost" data-act="ext-more">Pick a platform first</button>
+        </div>
+        <p class="error" role="alert">${sh.error ? esc(sh.error) : ""}</p>
+      </section>
+      ${full ? aboutHTML(full) : sh.error ? "" : `<p class="subtle small" role="status">Loading details…</p>`}`;
+    return pageFrame(name, head, body);
+  }
+  async function loadExt(sh) {
+    const id = sh.igdb;
+    if (idx.byIgdb[id]) return refreshOpenSheet();
+    const have = catRow(id);
+    if (have && have.summary !== undefined) { ensureSteam(id); return; }
+    try {
+      const row = await S.api.catalogGet(id);
+      S.ext[id] = row;
+      if (S.sheet === sh) rerenderKeepScroll();
+      ensureSteam(id);
+    } catch (e) {
+      sh.error = e.message;
+      if (S.sheet === sh) rerenderKeepScroll();
+    }
+  }
+  function openRow(igdbId, why) {
+    const g = idx.byIgdb[igdbId];
+    S.draft = null;
+    if (g) return openSheet({ kind: "game", id: g.id }, false);
+    const row = findRow(igdbId);
+    openSheet({ kind: "ext", igdb: igdbId, row, why: why || "" }, false);
+  }
 
-      <div class="row" style="margin-top:22px">
-        <button class="btn secondary" data-act="edit-game" data-id="${id}">Edit game details</button>
-        ${g.added_by === S.me ? `<button class="btn danger" data-act="delete-game" data-id="${id}">Delete game</button>` : ""}
-      </div>`, g.title);
+  // Put a catalogue game on the shelf (or reuse it if a friend already added it) and log a status.
+  async function addFromCatalog(igdbId, status, opts = {}) {
+    const existing = idx.byIgdb[igdbId];
+    if (existing) {
+      if (!myEntry(existing.id) && status !== "none") await saveEntryOptimistic(existing.id, { status, rating: null, hours: null, review: null });
+      return existing.id;
+    }
+    const full = (catRow(igdbId) && catRow(igdbId).summary !== undefined) ? catRow(igdbId) : await S.api.catalogGet(igdbId);
+    const light = opts.light || findRow(igdbId) || {};
+    const year = full.first_release_date ? Number(String(full.first_release_date).slice(0, 4)) : light.year || null;
+    let g;
+    try {
+      g = await S.api.addGame({ title: full.name || light.name, platform: opts.platform || null, year, cover_url: null, igdb_id: igdbId });
+    } catch (e) {
+      if (/already on the shelf/i.test(e.message)) {
+        await reload();
+        const ex = idx.byIgdb[igdbId];
+        if (ex) { if (!myEntry(ex.id) && status !== "none") await saveEntryOptimistic(ex.id, { status, rating: null, hours: null, review: null }); return ex.id; }
+      }
+      throw e;
+    }
+    if (status !== "none") await S.api.saveEntry(null, g.id, { status, rating: null, hours: null, review: null });
+    await reload();
+    return g.id;
   }
 
   function starInput(r) {
@@ -754,15 +1206,17 @@
   function othersReviews(id) {
     const others = (idx.byGame[id] || []).filter((e) => e.user_id !== S.me)
       .sort((a, b) => (b.review ? 1 : 0) - (a.review ? 1 : 0) || b.updated_at.localeCompare(a.updated_at));
-    if (!others.length) return `<p class="subtle">None of your friends have logged this yet.</p>`;
-    return others.map((e) => `<article class="review">
-      <div class="review-head">${avatar(e.user_id)}<div>
-        <div class="who">${esc(nameOf(e.user_id))}</div>
-        <div class="meta">${STATUS_LABEL[e.status]}${e.status === "finished" && took(e) ? ` ${took(e)}` : ""}${e.hours ? `, ${fmtHours(e.hours)}` : ""}, ${ago(e.updated_at)}</div>
-      </div></div>
-      ${e.rating != null ? `<div style="margin-top:8px">${stars(e.rating, 16)}</div>` : ""}
-      ${spoilerText(e, "review-text")}
-    </article>`).join("");
+    if (!others.length) return `<p class="subtle" style="margin:0">None of your friends have logged this yet.</p>`;
+    return others.map((e) => {
+      const bits = [STATUS_LABEL[e.status].toLowerCase() + (e.status === "finished" && took(e) ? ` ${took(e)}` : "")];
+      if (e.hours) bits.push(fmtHours(e.hours));
+      bits.push(ago(e.updated_at));
+      return `<article class="review">${avatar(e.user_id)}
+        <div class="review-body"><span class="who">${esc(nameOf(e.user_id))}</span> <span class="meta">${esc(bits.join(", "))}</span>
+          ${e.rating != null ? `<div>${stars(e.rating, 13)}</div>` : ""}
+          ${spoilerText(e, "review-text")}
+        </div></article>`;
+    }).join("");
   }
 
   function addSheet(sh) {
@@ -777,7 +1231,7 @@
           <label class="field" style="flex:0.6"><span>Year</span><input class="input" name="year" type="number" inputmode="numeric" min="1950" max="2100" placeholder="Optional"></label>
         </div>
         <datalist id="platforms">${PLATFORMS.map((p) => `<option value="${p}">`).join("")}</datalist>
-        <label class="field"><span>Cover image link</span><input class="input" name="cover_url" type="url" inputmode="url" autocapitalize="off" placeholder="https://… (optional)"><small>Paste a link to box art. Leave it blank and the game gets a cartridge.</small></label>
+        <label class="field"><span>Cover image link</span><input class="input" name="cover_url" type="url" inputmode="url" autocapitalize="off" placeholder="https://… (optional)"><small>Paste a link to box art. Leave it blank and the game gets a plain tile with its name.</small></label>
         <div class="field"><span>Your status</span>
           <div class="status-pick" role="group" aria-label="Your status">
             ${[...STATUSES, { id: "none", label: "Just add it" }].map((s) => `<button type="button" data-act="pick-add-status" data-status="${s.id}" aria-pressed="${(sh.status || "playing") === s.id}">${s.label}</button>`).join("")}
@@ -797,14 +1251,14 @@
       const onShelf = idx.byIgdb[picked.igdb_id];
       body = `<button type="button" class="btn ghost backlink" data-act="cat-unpick">${ICON.back}<span>Back to results</span></button>
         <div class="picked">
-          ${picked.cover_image_id ? `<img src="${esc(IGDB_IMG(picked.cover_image_id, "cover_big"))}" alt="" referrerpolicy="no-referrer">` : cart({ id: "p" + picked.igdb_id, title: picked.name })}
-          <div><h3>${esc(picked.name)}</h3><div class="subtle small">${[picked.year, picked.platforms.slice(0, 5).join(", ")].filter(Boolean).map(esc).join("<br>")}</div></div>
+          ${rowCover(picked)}
+          <div><h3>${esc(picked.name)}</h3><div class="subtle small">${[picked.year, (picked.platforms || []).slice(0, 5).join(", ")].filter(Boolean).map(esc).join("<br>")}</div></div>
         </div>
         ${onShelf && onShelf.id !== sh.linkId ? `<div class="suggest">${esc(onShelf.title)} is already on the shelf. <button type="button" data-act="open-game" data-id="${onShelf.id}">Open it</button></div>` : linking ? `
-        <p class="subtle">Link <b>${esc(idx.g[sh.linkId] ? idx.g[sh.linkId].title : "this game")}</b> to this entry? It gets this cover art, genres and critic score. Everyone's logs stay as they are.</p>
+        <p class="subtle">Link <b>${esc(idx.g[sh.linkId] ? idx.g[sh.linkId].title : "this game")}</b> to this entry? It gets this cover art, genres, critic score and Steam reviews. Everyone's logs stay as they are.</p>
         <p class="error" role="alert"></p>
         <button class="btn block" data-act="cat-link">Link game</button>` : `
-        ${picked.platforms.length ? `<div class="field"><span>Which platform do you play on?</span>
+        ${(picked.platforms || []).length ? `<div class="field"><span>Which platform do you play on?</span>
           <div class="chips wrap" role="group" aria-label="Platform">${picked.platforms.slice(0, 10).map((pf) =>
             `<button type="button" class="chip" data-act="cat-platform" data-p="${esc(pf)}" aria-pressed="${st.platform === pf}">${esc(pf)}</button>`).join("")}</div></div>` : ""}
         <div class="field"><span>Your status</span>
@@ -830,7 +1284,7 @@
     return `<ul class="cat-list${st.loading ? " is-loading" : ""}">${st.results.map((r) => {
       const onShelf = idx.byIgdb[r.igdb_id];
       return `<li><button type="button" data-act="cat-pick" data-igdb="${r.igdb_id}">
-        ${r.cover_image_id ? `<img src="${esc(IGDB_IMG(r.cover_image_id, "cover_small"))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="noart" aria-hidden="true"></span>`}
+        ${rowCover(r, { size: "cover_small" })}
         <span class="cat-text"><b>${esc(r.name)}</b><span>${[r.year, (r.platforms || []).slice(0, 4).join(", ")].filter(Boolean).map(esc).join(" · ")}</span></span>
         ${onShelf && onShelf.id !== (sh && sh.linkId) ? `<span class="on-shelf">On the shelf</span>` : ""}
       </button></li>`;
@@ -846,7 +1300,7 @@
     const d = S.draft;
     const t = took(mine);
     return sheetFrame("", `
-      <div class="finish-hero">${cart(g)}
+      <div class="finish-hero">${gameCover(g)}
         <h1>You finished ${esc(g.title)}</h1>
         <p class="subtle">${[t ? "You did it " + t : "", mine.hours ? fmtHours(mine.hours) + " played" : ""].filter(Boolean).join(", ") || "Nice one"}. How was it?</p>
       </div>
@@ -867,9 +1321,9 @@
     if (!g) return "";
     const c = catOf(g);
     const linkRow = S.api.catalogSearch ? `<div class="panel link-panel">
-        ${c ? `<p style="margin:0 0 10px">Linked to <b>${esc(c.name)}</b> in the games database.</p>
+        ${c ? `<p style="margin:0 0 12px">Linked to <b>${esc(c.name)}</b> in the games database.</p>
           <div class="row"><button type="button" class="btn secondary" data-act="link-start" data-id="${id}">Change</button><button type="button" class="btn danger" data-act="unlink" data-id="${id}">Unlink</button></div>`
-        : `<p style="margin:0 0 10px">Not linked to the games database yet. Link it to get cover art, genres and the critic score.</p>
+        : `<p style="margin:0 0 12px">Not linked to the games database yet. Link it to get cover art, genres, the critic score and Steam reviews.</p>
           <button type="button" class="btn secondary block" data-act="link-start" data-id="${id}">Link to the games database</button>`}
       </div>` : "";
     return sheetFrame("Edit game details", `${linkRow}
@@ -893,17 +1347,17 @@
     const groups = STATUSES.map((s) => {
       const es = st.es.filter((e) => e.status === s.id && idx.g[e.game_id]).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
       if (!es.length) return "";
-      return `<h2 class="section-title" style="margin-top:22px">${s.label} <span class="subtle small">${es.length}</span></h2>
+      return `<h2 class="section-title" style="margin-top:24px">${s.label} <span class="count">${es.length}</span></h2>
         <div class="grid">${es.map((e) => {
           const g = idx.g[e.game_id];
-          return `<button class="tile" data-act="open-game" data-id="${g.id}">${cart(g)}
+          return `<button class="tile" data-act="open-game" data-id="${g.id}">${gameCover(g)}
             <div class="tile-title">${esc(g.title)}</div>
-            <div class="tile-meta">${e.rating != null ? stars(e.rating, 12) : e.hours ? fmtHours(e.hours) : ""}</div></button>`;
+            <div class="tile-meta">${e.rating != null ? stars(e.rating, 11) : e.hours ? fmtHours(e.hours) : ""}</div></button>`;
         }).join("")}</div>`;
     }).join("");
     const bits = [`${st.fin} finished`, `${st.es.length} logged`];
     if (st.hours) bits.push(`${Math.round(st.hours)} hours`);
-    if (st.avg != null) bits.push(`average rating ${fmtRating(Math.round(st.avg * 10) / 10)}`);
+    if (st.avg != null) bits.push(`average rating ${fmtRating(round1(st.avg))}`);
     const t = taste(id);
     let tasteHTML = "";
     if (t) {
@@ -921,8 +1375,8 @@
       }
     }
     return sheetFrame("", `
-      <div style="display:flex;gap:14px;align-items:center;margin:4px 0 6px">${avatar(id, "lg")}
-        <div><h1 class="big-title" style="font-size:32px">${esc(p.display_name)}</h1>
+      <div class="friend-head">${avatar(id, "lg")}
+        <div><h1>${esc(p.display_name)}</h1>
         <div class="subtle small" style="margin-top:4px">${bits.join(", ")}</div></div></div>
       ${tasteHTML}
       ${groups || `<p class="subtle">${id === S.me ? "You haven't" : esc(p.display_name) + " hasn't"} logged any games yet.</p>`}`, p.display_name);
@@ -1010,90 +1464,80 @@
     const W = 1080, H = 1350;
     const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
     const ctx = cv.getContext("2d");
-    const font = (w, px) => `${w} ${px}px Archivo, system-ui, -apple-system, sans-serif`;
-    try { await Promise.all([document.fonts.load(font(850, 72)), document.fonts.load(font(600, 36))]); } catch (_) {}
-    const setStretch = (v) => { try { ctx.fontStretch = v; } catch (_) {} };
-    const col = cartColors(g);
+    const font = (w, px) => `${w} ${px}px Geologica, system-ui, -apple-system, sans-serif`;
+    try { await Promise.all([document.fonts.load(font(700, 72)), document.fonts.load(font(500, 34)), document.fonts.load(font(400, 36))]); } catch (_) {}
+    const t = gameTint(g);
 
-    // Background
-    ctx.fillStyle = "#1C1F33"; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "#000000"; ctx.fillRect(0, 0, W, H);
+    // Tinted top panel, rounded at the bottom like the game page
+    const ph = 650, pr = 72;
+    ctx.fillStyle = t.bg;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W, 0); ctx.lineTo(W, ph - pr); ctx.arcTo(W, ph, W - pr, ph, pr);
+    ctx.lineTo(pr, ph); ctx.arcTo(0, ph, 0, ph - pr, pr); ctx.closePath(); ctx.fill();
 
-    // Cartridge
-    const cw = 500, ch = 560, cx = (W - cw) / 2, cy = 96;
-    ctx.fillStyle = col.d; rr(ctx, cx, cy + 18, cw, ch, 44); ctx.fill();
-    ctx.fillStyle = col.c; rr(ctx, cx, cy, cw, ch, 44); ctx.fill();
-    ctx.fillStyle = "rgba(0,0,0,0.2)";
-    for (let i = 0; i < 12; i++) ctx.fillRect(cx + 120 + i * 23, cy + 22, 6, 40);
-    const lx = cx + 46, ly = cy + 92, lw = cw - 92, lh = ch - 184;
-    ctx.save(); rr(ctx, lx, ly, lw, lh, 16); ctx.clip();
-    ctx.fillStyle = "#F7F5EE"; ctx.fillRect(lx, ly, lw, lh);
-    const art = await loadImage(coverUrl(g, "t_cover_big"));
+    // Cover
+    const cw = 360, ch = 480, cx = (W - cw) / 2, cy = 90;
+    ctx.save(); ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 70; ctx.shadowOffsetY = 28;
+    ctx.fillStyle = t.tile; rr(ctx, cx, cy, cw, ch, 28); ctx.fill(); ctx.restore();
+    ctx.save(); rr(ctx, cx, cy, cw, ch, 28); ctx.clip();
+    ctx.fillStyle = t.tile; ctx.fillRect(cx, cy, cw, ch);
+    const art = await loadImage(coverUrl(g, "cover_big_2x"));
     let drewArt = false;
     if (art) {
       try {
-        const s = Math.max(lw / art.width, lh / art.height);
+        const s = Math.max(cw / art.width, ch / art.height);
         const iw = art.width * s, ih = art.height * s;
-        ctx.drawImage(art, lx + (lw - iw) / 2, ly + (lh - ih) / 2, iw, ih);
+        ctx.drawImage(art, cx + (cw - iw) / 2, cy + (ch - ih) / 2, iw, ih);
         drewArt = true;
       } catch (_) { drewArt = false; }
     }
     if (!drewArt) {
-      ctx.fillStyle = col.band; ctx.fillRect(lx, ly, lw, lh * 0.22);
-      ctx.fillStyle = "#1C1F33"; ctx.font = font(850, 54); setStretch("extra-condensed");
-      const tl = wrapLines(ctx, g.title, lw - 56, 4);
-      tl.forEach((t, i) => ctx.fillText(t, lx + 28, ly + lh - 34 - (tl.length - 1 - i) * 52));
-      setStretch("normal");
+      ctx.fillStyle = t.soft; ctx.font = font(650, 46);
+      const tl = wrapLines(ctx, g.title, cw - 64, 4);
+      tl.forEach((s, i) => ctx.fillText(s, cx + 32, cy + ch - 40 - (tl.length - 1 - i) * 54));
     }
     ctx.restore();
 
-    // Paper panel
-    const px = 60, py = 720, pw = W - 120, ph = H - py - 60;
-    ctx.fillStyle = "#F7F5EE"; rr(ctx, px, py, pw, ph, 36); ctx.fill();
-    let y = py + 84;
-    const verb = { want: "wants to play", playing: "is playing", paused: "paused", finished: "finished", dropped: "dropped" }[e.status];
-    ctx.fillStyle = "#565C78"; ctx.font = font(650, 34); setStretch("normal");
-    ctx.fillText(`${me ? me.display_name : "I"} ${verb}`, px + 50, y);
-    y += 22;
-    ctx.fillStyle = "#1C1F33"; ctx.font = font(850, 76); setStretch("extra-condensed");
-    const tl = wrapLines(ctx, g.title, pw - 100, 2);
-    tl.forEach((t) => { y += 74; ctx.fillText(t, px + 50, y); });
-    setStretch("normal");
+    // Text
+    const x = 84;
+    let y = 745;
+    const verb = VERB[e.status];
+    ctx.fillStyle = "#A1A1A8"; ctx.font = font(500, 34);
+    ctx.fillText(`${me ? me.display_name : "I"} ${verb}`, x, y);
+    ctx.fillStyle = "#F2F2F3"; ctx.font = font(700, 70);
+    wrapLines(ctx, g.title, W - x * 2, 2).forEach((s) => { y += 80; ctx.fillText(s, x, y); });
     if (e.rating != null) {
       y += 34;
       for (let i = 0; i < 5; i++) {
-        const sx = px + 50 + 30 + i * 70, sy = y + 30;
-        ctx.fillStyle = "#CCD1DD"; starShape(ctx, sx, sy, 30); ctx.fill();
+        const sx = x + 28 + i * 68, sy = y + 28;
+        ctx.fillStyle = "rgba(255,255,255,0.16)"; starShape(ctx, sx, sy, 28); ctx.fill();
         const fill = e.rating >= i + 1 ? 1 : e.rating >= i + 0.5 ? 0.5 : 0;
-        if (fill) { ctx.save(); ctx.beginPath(); ctx.rect(sx - 31, sy - 31, 62 * fill, 62); ctx.clip(); ctx.fillStyle = "#F0A800"; starShape(ctx, sx, sy, 30); ctx.fill(); ctx.restore(); }
+        if (fill) { ctx.save(); ctx.beginPath(); ctx.rect(sx - 29, sy - 29, 58 * fill, 58); ctx.clip(); ctx.fillStyle = "#F6D37A"; starShape(ctx, sx, sy, 28); ctx.fill(); ctx.restore(); }
       }
-      y += 66;
+      y += 58;
     }
     const metaParts = [e.hours ? fmtHours(e.hours) + " played" : "", e.status === "finished" ? took(e) : ""].filter(Boolean);
-    const bottomLimit = py + ph - (metaParts.length ? 120 : 80);
+    const bottomLimit = H - 130;
     if (e.review) {
-      ctx.font = font(500, 38);
+      ctx.font = font(400, 36);
       if (includeReview) {
-        ctx.fillStyle = "#1C1F33";
-        const room = Math.max(1, Math.min(5, Math.floor((bottomLimit - y - 20) / 50)));
-        const ql = wrapLines(ctx, "“" + e.review.replace(/\s+/g, " ").trim() + "”", pw - 100, room);
-        ql.forEach((q) => { y += 52; ctx.fillText(q, px + 50, y); });
+        ctx.fillStyle = "#DADADD";
+        const room = Math.max(1, Math.min(5, Math.floor((bottomLimit - y - 16) / 50)));
+        wrapLines(ctx, "“" + e.review.replace(/\s+/g, " ").trim() + "”", W - x * 2, room).forEach((q) => { y += 50; ctx.fillText(q, x, y); });
       } else if (e.spoiler) {
-        ctx.fillStyle = "#8A8FA8"; y += 52; ctx.fillText("Review hidden: it has spoilers", px + 50, y);
+        ctx.fillStyle = "#6E6E76"; y += 50; ctx.fillText("Review hidden: it has spoilers", x, y);
       }
     }
     // Footer
-    const fy = py + ph - 50;
-    if (metaParts.length) { ctx.fillStyle = "#565C78"; ctx.font = font(600, 30); ctx.fillText(metaParts.join(", ").replace(/^./, (c) => c.toUpperCase()), px + 50, fy); }
-    ctx.font = font(850, 34); setStretch("condensed"); ctx.fillStyle = "#1C1F33";
+    const fy = H - 70;
+    if (metaParts.length) { ctx.fillStyle = "#A1A1A8"; ctx.font = font(500, 28); ctx.fillText(metaParts.join(", ").replace(/^./, (c) => c.toUpperCase()), x, fy); }
+    ctx.font = font(700, 32); ctx.fillStyle = "#F2F2F3";
     const brand = "Save Point"; const bw = ctx.measureText(brand).width;
-    ctx.fillText(brand, px + pw - 50 - bw, fy);
-    setStretch("normal");
-    const ix = px + pw - 50 - bw - 46, iy = fy - 32;
-    ctx.fillStyle = "#2238A0"; rr(ctx, ix, iy + 4, 32, 36, 6); ctx.fill();
-    ctx.fillStyle = "#3456D1"; rr(ctx, ix, iy, 32, 36, 6); ctx.fill();
-    ctx.fillStyle = "#F7F5EE"; ctx.fillRect(ix + 6, iy + 9, 20, 18);
-    ctx.fillStyle = "#E5483B"; ctx.fillRect(ix + 6, iy + 9, 20, 5);
-    if (drewArt) { ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.font = font(500, 20); ctx.fillText("Cover art via IGDB", 60, H - 22); }
+    ctx.fillText(brand, W - x - bw, fy);
+    const ix = W - x - bw - 44, iy = fy - 30;
+    ctx.fillStyle = "#F2F2F3"; rr(ctx, ix, iy, 30, 38, 6); ctx.fill();
+    ctx.fillStyle = "#000000"; starShape(ctx, ix + 15, iy + 19, 10); ctx.fill();
+    if (drewArt) { ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.font = font(400, 20); ctx.fillText("Cover art via IGDB", x, H - 24); }
 
     return await new Promise((resolve, reject) => cv.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"));
   }
@@ -1104,9 +1548,10 @@
       const el = document.createElement("div");
       el.className = "backdrop";
       el.style.alignItems = "center";
+      el.style.zIndex = "50";
       el.innerHTML = `<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dlg-t">
         <h2 id="dlg-t">${esc(title)}</h2><p>${esc(body)}</p>
-        <div class="row"><button class="btn secondary" data-r="0">Cancel</button><button class="btn" data-r="1" style="${danger ? "background:var(--danger);color:#fff" : ""}">${esc(ok)}</button></div></div>`;
+        <div class="row"><button class="btn secondary" data-r="0">Cancel</button><button class="btn" data-r="1" style="${danger ? "background:var(--danger);color:#000" : ""}">${esc(ok)}</button></div></div>`;
       document.body.appendChild(el);
       el.querySelector('[data-r="1"]').focus();
       el.addEventListener("click", (ev) => {
@@ -1121,7 +1566,7 @@
     if (!t) { t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
     t.textContent = msg;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.remove(), 2200);
+    toastTimer = setTimeout(() => t.remove(), 2400);
   }
 
   async function busy(btn, fn) {
@@ -1134,13 +1579,54 @@
   const actions = {
     tab(el) {
       const t = el.dataset.tab;
-      if (S.tab === t) { window.scrollTo({ top: 0, behavior: "smooth" }); reload().catch(() => {}); return; }
+      if (S.tab === t) { window.scrollTo({ top: 0, behavior: "smooth" }); reload().catch(() => {}); if (t === "discover") loadDiscover(true); return; }
       S.tab = t; lsSet("sp-tab", t); renderMain(); window.scrollTo(0, 0);
+      if (t === "discover") loadDiscover();
     },
     scope(el) { S.scope = el.dataset.scope; lsSet("sp-scope", S.scope); renderMain(); },
     "status-filter"(el) { S.status = el.dataset.status; renderMain(); },
-    "open-game"(el) { S.draft = null; openSheet({ kind: "game", id: el.dataset.id }); },
+    "disc-view"(el) { S.discView = el.dataset.v; lsSet("sp-disc-view", S.discView); renderMain(); },
+    "disc-retry"() { loadDiscover(true); },
+    plat(el) { S.plat = el.dataset.p; lsSet("sp-plat", S.plat); renderMain(); },
+    "open-game"(el) { S.draft = null; openSheet({ kind: "game", id: el.dataset.id }, !!(S.sheet && S.sheet.kind === "friend")); },
+    "open-row"(el) { openRow(Number(el.dataset.igdb), el.dataset.why); },
     "open-friend"(el) { openSheet({ kind: "friend", id: el.dataset.id }); },
+    async "quick-want"(el) {
+      const id = Number(el.dataset.igdb);
+      const row = findRow(id);
+      el.disabled = true; el.setAttribute("aria-pressed", "true"); el.innerHTML = ICON.check;
+      try {
+        await addFromCatalog(id, "want", { light: row });
+        toast(`${row ? row.name : "Game"} added to Want to play`);
+        safeRenderMain();
+      } catch (e) {
+        if (el.isConnected) { el.disabled = false; el.setAttribute("aria-pressed", "false"); el.innerHTML = ICON.plus; }
+        toast(e.message);
+      }
+    },
+    async "ext-add"(el) {
+      const sh = S.sheet;
+      if (!sh || sh.kind !== "ext") return;
+      const status = el.dataset.status;
+      await busy(el, async () => {
+        try {
+          const gameId = await addFromCatalog(sh.igdb, status, { light: sh.row });
+          S.draft = null;
+          openSheet({ kind: "game", id: gameId }, false);
+          toast(status === "want" ? "Added to Want to play" : "Added to your shelf");
+          if (status === "finished") { S.draft = null; openSheet({ kind: "finish", id: gameId }, true); }
+        } catch (e) {
+          const err = $("#layer .error"); if (err) err.textContent = e.message; else toast(e.message);
+        }
+      });
+    },
+    "ext-more"() {
+      const sh = S.sheet;
+      const full = catRow(sh.igdb);
+      const row = { ...(sh.row || {}), igdb_id: sh.igdb, name: (full && full.name) || (sh.row && sh.row.name), platforms: (full && full.platforms) || (sh.row && sh.row.platforms) || [], cover_image_id: (full && full.cover_image_id) || (sh.row && sh.row.cover_image_id) };
+      S.cat = { q: row.name, results: [row], loading: false, error: null, picked: row, platform: null };
+      openSheet({ kind: "add", mode: "search", status: "want" }, true);
+    },
     "add-game"(el) {
       const title = el.dataset.title || "";
       S.cat = { q: title, results: [], loading: false, error: null, picked: null, platform: null };
@@ -1149,10 +1635,11 @@
     },
     "cat-manual"() {
       const t = (S.cat && S.cat.q) || "";
-      openSheet({ ...S.sheet, mode: "manual", title: t });
+      const back = S.back;
+      openSheet({ ...S.sheet, mode: "manual", title: t }); S.back = back;
     },
-    "cat-back"() { openSheet({ ...S.sheet, mode: "search" }); },
-    async "cat-pick"(el) {
+    "cat-back"() { const back = S.back; openSheet({ ...S.sheet, mode: "search" }); S.back = back; },
+    "cat-pick"(el) {
       const id = Number(el.dataset.igdb);
       const r = (S.cat.results || []).find((x) => x.igdb_id === id);
       if (!r) return;
@@ -1171,24 +1658,9 @@
         try {
           const existing = idx.byIgdb[pk.igdb_id];
           if (existing) { S.draft = null; return openSheet({ kind: "game", id: existing.id }); }
-          const full = await S.api.catalogGet(pk.igdb_id);
-          const year = full.first_release_date ? Number(String(full.first_release_date).slice(0, 4)) : pk.year || null;
-          let g;
-          try {
-            g = await S.api.addGame({ title: full.name || pk.name, platform: S.cat.platform || null, year, cover_url: null, igdb_id: pk.igdb_id });
-          } catch (e) {
-            if (/already on the shelf/i.test(e.message)) {
-              await reload();
-              const ex = idx.byIgdb[pk.igdb_id];
-              if (ex) { S.draft = null; return openSheet({ kind: "game", id: ex.id }); }
-            }
-            throw e;
-          }
-          const st = S.sheet.status || "playing";
-          if (st !== "none") await S.api.saveEntry(null, g.id, { status: st, rating: null, hours: null, review: null });
-          await reload();
+          const gameId = await addFromCatalog(pk.igdb_id, S.sheet.status || "playing", { platform: S.cat.platform, light: pk });
           S.draft = null; S.cat = null;
-          openSheet({ kind: "game", id: g.id });
+          openSheet({ kind: "game", id: gameId });
           toast("Game added");
         } catch (e) {
           if (err && err.isConnected) err.textContent = e.message; else toast(e.message);
@@ -1217,7 +1689,7 @@
       });
     },
     async unlink(el) {
-      const ok = await confirmDialog({ title: "Unlink this game?", body: "It loses the cover art, genres and critic score from the games database. Logs and reviews stay.", ok: "Unlink" });
+      const ok = await confirmDialog({ title: "Unlink this game?", body: "It loses the cover art, genres, critic score and Steam reviews from the games database. Logs and reviews stay.", ok: "Unlink" });
       if (!ok) return;
       try { await S.api.linkGame(el.dataset.id, null); await reload(); renderSheet(); toast("Unlinked"); }
       catch (e) { toast(e.message); }
@@ -1231,18 +1703,12 @@
     },
     more(el) { const p = $("#summary"); if (p) { p.classList.toggle("open"); el.textContent = p.classList.contains("open") ? "Less" : "More"; } },
     "update-refresh"() { applyUpdate(); },
-    "pick-external"(el) {
-      const id = Number(el.dataset.igdb);
-      const row = S.similar && S.similar.games.find((r) => r.igdb_id === id);
-      if (!row) return;
-      S.cat = { q: row.name, results: [row], loading: false, error: null, picked: row, platform: null };
-      openSheet({ kind: "add", mode: "search", status: "want" });
-    },
     "share-open"(el) {
       const id = el.dataset.id;
       const mine = myEntry(id);
+      syncDraftFromForm();
       S.share = { gameId: id, include: !!(mine && mine.review && !mine.spoiler), url: null, blob: null, busy: true };
-      openSheet({ kind: "share", id });
+      openSheet({ kind: "share", id }, true);
       buildShare();
     },
     async "share-go"() {
@@ -1264,9 +1730,9 @@
       document.body.appendChild(a); a.click(); a.remove();
       toast("Image saved");
     },
-    "edit-game"(el) { openSheet({ kind: "edit", id: el.dataset.id }); },
-    close() { closeSheet(); },
-    backdrop(el, ev) { if (ev.target === el) closeSheet(); },
+    "edit-game"(el) { openSheet({ kind: "edit", id: el.dataset.id }, true); },
+    close() { goBack(); },
+    backdrop(el, ev) { if (ev.target === el) goBack(); },
     "pick-status"(el) {
       S.draft.status = el.dataset.status;
       el.parentElement.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b === el));
@@ -1284,9 +1750,9 @@
       }
       syncDraftFromForm();
       S.draft.rating = val;
-      rerenderEntryForm();
+      rerenderKeepScroll();
     },
-    "clear-rating"() { syncDraftFromForm(); S.draft.rating = null; rerenderEntryForm(); },
+    "clear-rating"() { syncDraftFromForm(); S.draft.rating = null; rerenderKeepScroll(); },
     async "remove-entry"(el) {
       const ok = await confirmDialog({ title: "Remove from your shelf?", body: "Your status, rating, hours and review for this game will be deleted. The game stays on the group shelf.", ok: "Remove", danger: true });
       if (!ok) return;
@@ -1444,16 +1910,10 @@
       if (box()) box().innerHTML = catalogResultsHTML(S.sheet);
     }, 350);
   }
-  function rerenderEntryForm() {
-    const sheet = $(".sheet");
-    const top = sheet ? sheet.scrollTop : 0;
-    renderSheet();
-    const s2 = $(".sheet"); if (s2) s2.scrollTop = top;
-  }
 
   // ---------------- Forms ----------------
   const forms = {
-    async signin(f, btn) {
+    async signin(f) {
       const email = f.email.value.trim(), password = f.password.value;
       if (!email || !password) throw new Error("Enter your email and password.");
       await S.api.signIn(email, password);
@@ -1477,7 +1937,7 @@
       lsSet("sp-pending", null);
       await afterSignIn();
     },
-    async entry(f) {
+    async entry() {
       syncDraftFromForm();
       const d = S.draft;
       if (d.hours != null && (!isFinite(d.hours) || d.hours < 0)) throw new Error("Hours should be a number like 12 or 3.5.");
@@ -1496,8 +1956,8 @@
       const gameId = d.gameId;
       S.draft = null;
       const ok = saveEntryOptimistic(gameId, fields, mine ? "Changes saved" : "Added to your shelf");
-      if (justFinished && (fields.rating == null || !fields.review)) openSheet({ kind: "finish", id: gameId });
-      else renderSheet();
+      if (justFinished && (fields.rating == null || !fields.review)) openSheet({ kind: "finish", id: gameId }, true);
+      else rerenderKeepScroll();
       await ok;
     },
     async finish(f) {
@@ -1596,7 +2056,7 @@
     if (ev.target.name === "share-include" && S.share) { S.share.include = ev.target.checked; buildShare(); }
   });
   document.addEventListener("keydown", (ev) => {
-    if (ev.key === "Escape" && S.sheet && !$(".dialog")) closeSheet();
+    if (ev.key === "Escape" && S.sheet && !$(".dialog")) goBack();
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") { if (S.me) lsSet("sp-seen", new Date().toISOString()); return; }
@@ -1606,21 +2066,38 @@
   window.addEventListener("pagehide", () => { if (S.me) lsSet("sp-seen", new Date().toISOString()); });
 
   // ---------------- S19: gestures ----------------
-  // Swipe a sheet down to close it.
+  // Swipe a sheet down to close it; swipe a game page right from the left edge to go back; pull the main screen to refresh.
   let drag = null;
   document.addEventListener("touchstart", (ev) => {
+    const t0 = ev.touches[0];
+    const page = ev.target.closest(".page");
+    if (page) {
+      if (t0.clientX > 32 || ev.target.closest("input, textarea, select, .star-input")) return;
+      drag = { kind: "page", el: page, x0: t0.clientX, y0: t0.clientY, t0: Date.now(), dx: 0, locked: false };
+      return;
+    }
     const sheet = ev.target.closest(".sheet");
     if (sheet) {
       if (sheet.scrollTop > 0 || ev.target.closest("textarea, input, select, .star-input")) return;
-      drag = { kind: "sheet", el: sheet, y0: ev.touches[0].clientY, x0: ev.touches[0].clientX, t0: Date.now(), dy: 0 };
+      drag = { kind: "sheet", el: sheet, y0: t0.clientY, x0: t0.clientX, t0: Date.now(), dy: 0 };
       return;
     }
     if (S.sheet || !S.me || !$("#main") || window.scrollY > 0 || $(".backdrop")) return;
-    drag = { kind: "ptr", y0: ev.touches[0].clientY, x0: ev.touches[0].clientX, dy: 0 };
+    drag = { kind: "ptr", y0: t0.clientY, x0: t0.clientX, dy: 0 };
   }, { passive: true });
   document.addEventListener("touchmove", (ev) => {
     if (!drag) return;
     const dy = ev.touches[0].clientY - drag.y0, dx = ev.touches[0].clientX - drag.x0;
+    if (drag.kind === "page") {
+      if (!drag.locked) {
+        if (Math.abs(dy) > Math.abs(dx)) { drag = null; return; }
+        drag.locked = true;
+      }
+      drag.dx = Math.max(0, dx);
+      if (ev.cancelable) ev.preventDefault();
+      drag.el.style.transition = "none"; drag.el.style.transform = `translateX(${drag.dx}px)`;
+      return;
+    }
     if (drag.dy === 0 && Math.abs(dx) > Math.abs(dy)) { drag = null; return; }
     if (dy <= 0) { if (drag.kind === "sheet") drag.el.style.transform = ""; drag.dy = 0; updatePtr(0); return; }
     drag.dy = dy;
@@ -1631,10 +2108,15 @@
   document.addEventListener("touchend", () => {
     if (!drag) return;
     const d = drag; drag = null;
-    if (d.kind === "sheet") {
+    if (d.kind === "page") {
+      const fast = d.dx / Math.max(1, Date.now() - d.t0) > 0.5;
+      d.el.style.transition = "transform 0.2s ease";
+      if (d.dx > 100 || (fast && d.dx > 40)) { d.el.style.transform = "translateX(100%)"; setTimeout(goBack, 180); }
+      else d.el.style.transform = "";
+    } else if (d.kind === "sheet") {
       const fast = d.dy / Math.max(1, Date.now() - d.t0) > 0.6;
       d.el.style.transition = "transform 0.2s ease";
-      if (d.dy > 110 || (fast && d.dy > 40)) { d.el.style.transform = "translateY(100%)"; setTimeout(closeSheet, 180); }
+      if (d.dy > 110 || (fast && d.dy > 40)) { d.el.style.transform = "translateY(100%)"; setTimeout(goBack, 180); }
       else d.el.style.transform = "";
     } else {
       if (d.dy > 70) { updatePtr(70, "Refreshing…"); reload().catch(() => toast("Couldn't refresh. Check your connection.")).finally(() => updatePtr(0)); }
@@ -1668,6 +2150,7 @@
   async function start() {
     renderLoading();
     if (S.api && S.api.unsubscribe) S.api.unsubscribe();
+    S.disc = null; S.ext = {}; S.similar = null;
     const params = new URLSearchParams(location.search);
     const cfg = window.SAVEPOINT_CONFIG || {};
     const configured = cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase;

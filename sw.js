@@ -1,9 +1,10 @@
 // Save Point service worker: keeps the app shell available so it opens fast
 // (and opens at all when the connection is bad). Data always comes live from Supabase.
-const VERSION = "savepoint-v3";
+const VERSION = "savepoint-v4";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./app.js", "./api.js", "./config.js",
   "./vendor/supabase.js", "./manifest.webmanifest",
+  "./fonts/geologica-latin.woff2", "./fonts/geologica-latin-ext.woff2",
   "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/favicon-64.png",
 ];
 
@@ -42,13 +43,5 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Google Fonts: cache after first use.
-  if (url.hostname === "fonts.googleapis.com" || url.hostname === "fonts.gstatic.com") {
-    e.respondWith(
-      caches.match(req).then((hit) => hit || fetch(req).then((res) => {
-        const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); return res;
-      }))
-    );
-  }
-  // Everything else (Supabase, cover images) goes straight to the network.
+  // Everything else (Supabase, cover images) goes straight to the network. Fonts are self-hosted now.
 });
