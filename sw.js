@@ -1,6 +1,6 @@
 // Save Point service worker: keeps the app shell available so it opens fast
 // (and opens at all when the connection is bad). Data always comes live from Supabase.
-const VERSION = "savepoint-v1";
+const VERSION = "savepoint-v2";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./app.js", "./api.js", "./config.js",
   "./vendor/supabase.js", "./manifest.webmanifest",
@@ -8,7 +8,12 @@ const SHELL = [
 ];
 
 self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // Don't take over straight away: the app shows "A new version is ready" and the person taps Refresh.
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)));
+});
+
+self.addEventListener("message", (e) => {
+  if (e.data && e.data.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("activate", (e) => {

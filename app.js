@@ -33,13 +33,16 @@
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
     close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
     search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg>',
+    back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
   };
+  const SESSION_STEPS = [0.5, 1, 2];
+  const IGDB_IMG = (id, size) => `https://images.igdb.com/igdb/image/upload/t_${size}/${id}.jpg`;
 
   // ---------------- State ----------------
   const S = {
     api: null,
     me: null,
-    profiles: [], games: [], entries: [],
+    profiles: [], games: [], entries: [], catalog: [],
     tab: lsGet("sp-tab") || "feed",
     scope: lsGet("sp-scope") || "mine",
     status: "all",
@@ -48,8 +51,12 @@
     sheet: null, // { kind, ... }
     draft: null,
     lastLoad: 0,
+    seenAt: null,          // S22: feed items newer than this are "new since you last opened"
+    revealed: new Set(),   // S24: spoiler reviews tapped open this session
+    pending: {},           // S18: in-flight saves per game, so they never overlap
+    cat: null,             // S31: catalogue search state for the open Add/Link sheet
   };
-  let idx = { p: {}, g: {}, byGame: {} };
+  let idx = { p: {}, g: {}, byGame: {}, c: {}, byIgdb: {} };
 
   // ---------------- Utils ----------------
   function lsGet(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }
@@ -73,14 +80,35 @@
     return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
   }
   function fmtHours(h) { return h == null ? "" : (Math.round(h * 10) / 10) + "h"; }
+  function fmtDate(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+  }
+  function dateInput(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function fromDateInput(v) { return v ? new Date(v + "T12:00:00").toISOString() : null; }
+  function took(e) {
+    if (!e || !e.started_at || !e.finished_at) return "";
+    const days = Math.round((new Date(e.finished_at) - new Date(e.started_at)) / 864e5);
+    if (days < 0) return "";
+    if (days < 1) return "in a day";
+    if (days < 14) return `in ${days} days`;
+    if (days < 60) return `in ${Math.round(days / 7)} weeks`;
+    return `in ${Math.round(days / 30)} months`;
+  }
   function fmtRating(r) { return r == null ? "" : (Number.isInteger(r) ? r.toFixed(0) : r.toFixed(1)); }
   const $ = (sel, root = document) => root.querySelector(sel);
 
   // ---------------- Derived data ----------------
   function reindex() {
-    idx = { p: {}, g: {}, byGame: {} };
+    idx = { p: {}, g: {}, byGame: {}, c: {}, byIgdb: {} };
     S.profiles.forEach((p) => (idx.p[p.id] = p));
-    S.games.forEach((g) => (idx.g[g.id] = g));
+    S.catalog.forEach((c) => (idx.c[c.igdb_id] = c));
+    S.games.forEach((g) => { idx.g[g.id] = g; if (g.igdb_id != null) idx.byIgdb[g.igdb_id] = g; });
     S.entries.forEach((e) => (idx.byGame[e.game_id] = idx.byGame[e.game_id] || []).push(e));
   }
   function myEntry(gameId) { return (idx.byGame[gameId] || []).find((e) => e.user_id === S.me) || null; }
@@ -126,14 +154,28 @@
     const t = game.title || "";
     const tk = t.length <= 6 ? 19 : t.length <= 10 ? 16 : t.length <= 16 ? 13.5 : t.length <= 26 ? 11.5 : 10;
     const meta = [game.platform, game.year].filter(Boolean).join(" ");
-    const art = game.cover_url && /^https:\/\//i.test(game.cover_url);
+    const art = coverUrl(game, "t_cover_big");
     const sticker = opts.sticker ? `<span class="sticker">${esc(opts.sticker)}</span>` : "";
     return `<div class="cart${art ? " has-art" : ""}" style="--c:${pl.c};--c-dark:${pl.d};--band:${band};--tk:${tk}" aria-hidden="true">
       <div class="label">
-        ${art ? `<img src="${esc(game.cover_url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.cart').classList.remove('has-art');this.remove()">` : ""}
+        ${art ? `<img src="${esc(art)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.cart').classList.remove('has-art');this.remove()">` : ""}
         <div class="label-title">${esc(t)}</div>
         ${meta ? `<div class="label-meta">${esc(meta)}</div>` : ""}
       </div>${sticker}</div>`;
+  }
+
+  function catOf(game) { return game && game.igdb_id != null ? idx.c[game.igdb_id] || null : null; }
+  function coverUrl(game, size) {
+    if (game.cover_url && /^https:\/\//i.test(game.cover_url)) return game.cover_url;
+    const c = catOf(game);
+    return c && c.cover_image_id ? IGDB_IMG(c.cover_image_id, size.replace(/^t_/, "")) : "";
+  }
+  function spoilerText(e, cls) {
+    if (!e.review) return "";
+    if (e.spoiler && e.user_id !== S.me && !S.revealed.has(e.id)) {
+      return `<button type="button" class="${cls} spoiler" data-act="reveal" data-id="${e.id}"><span>Contains spoilers. Tap to show.</span></button>`;
+    }
+    return `<div class="${cls}">${e.spoiler ? '<span class="spoiler-tag">Spoilers</span> ' : ""}${esc(e.review)}</div>`;
   }
 
   // ---------------- Screens: boot / auth ----------------
@@ -206,6 +248,7 @@
       }
       if (!member) return renderJoin();
       lsSet("sp-pending", null);
+      if (!S.seenAt) S.seenAt = lsGet("sp-seen") || new Date().toISOString();
       await reload();
       S.api.subscribe(debounce(() => reload(), 600));
     } catch (e) {
@@ -222,7 +265,7 @@
   // ---------------- Data ----------------
   async function reload() {
     const data = await S.api.loadAll();
-    S.profiles = data.profiles; S.games = data.games; S.entries = data.entries;
+    S.profiles = data.profiles; S.games = data.games; S.entries = data.entries; S.catalog = data.catalog || [];
     S.lastLoad = Date.now();
     reindex();
     renderMain();
@@ -240,6 +283,7 @@
     ];
     const body = S.tab === "shelf" ? shelfView() : S.tab === "friends" ? friendsView() : feedView();
     root().innerHTML = `
+      <div class="ptr" id="ptr" aria-hidden="true"><span>Pull to refresh</span></div>
       <main class="screen" id="main">
         ${S.api.demo ? `<div class="demo-bar"><span>Demo mode: changes stay on this device.</span><button data-act="exit-demo">Exit demo</button></div>` : ""}
         ${body}
@@ -274,23 +318,35 @@
            </button>`).join("")}</div>`
       : "";
 
+    const isNew = (e) => S.seenAt && e.user_id !== S.me && e.updated_at > S.seenAt;
+    const newCount = items.filter(isNew).length;
+    let rows = "";
+    let dividerDone = false;
+    items.forEach((e, i) => {
+      if (newCount && !dividerDone && !isNew(e) && i > 0) {
+        rows += `<li class="feed-divider" role="separator"><span>Earlier</span></li>`;
+        dividerDone = true;
+      }
+      rows += feedItem(e, isNew(e));
+    });
     const list = items.length
-      ? `<h2 class="section-title">Latest</h2><ul class="feed">${items.map(feedItem).join("")}</ul>`
+      ? `<h2 class="section-title">Latest${newCount ? ` <span class="new-count">${newCount} new</span>` : ""}</h2><ul class="feed">${rows}</ul>`
       : emptyState("Nothing logged yet", "Add a game you're playing and it'll show up here for everyone.", "Add a game");
 
     return topbar("Feed") + strip + list;
   }
 
-  function feedItem(e) {
+  function feedItem(e, fresh) {
     const g = idx.g[e.game_id];
     const who = nameOf(e.user_id);
     const verb = e.user_id === S.me ? { want: "want to play", playing: "are playing" }[e.status] || VERB[e.status] : VERB[e.status];
-    return `<li class="feed-item">
+    const t = e.status === "finished" ? took(e) : "";
+    return `<li class="feed-item${fresh ? " is-new" : ""}">
       ${avatar(e.user_id)}
       <div>
         <div class="what"><b>${esc(who)}</b> ${verb} <button class="link-btn" data-act="open-game" data-id="${g.id}">${esc(g.title)}</button></div>
-        <div class="when">${e.rating != null ? stars(e.rating, 13) + " " : ""}${ago(e.updated_at)}${e.hours ? ", " + fmtHours(e.hours) + " played" : ""}</div>
-        ${e.review ? `<div class="quote">${esc(e.review)}</div>` : ""}
+        <div class="when">${e.rating != null ? stars(e.rating, 13) + " " : ""}${ago(e.updated_at)}${e.hours ? ", " + fmtHours(e.hours) + " played" : ""}${t ? ", " + t : ""}</div>
+        ${spoilerText(e, "quote")}
       </div>
       <button class="thumb" data-act="open-game" data-id="${g.id}" aria-label="Open ${esc(g.title)}">${cart(g)}</button>
     </li>`;
@@ -364,11 +420,13 @@
     const meta = sc
       ? `${stars(sc.avg, 12)}<span>${fmtRating(Math.round(sc.avg * 10) / 10)}</span>`
       : `<span>${(idx.byGame[g.id] || []).length ? "No ratings yet" : "Nobody's logged it"}</span>`;
-    return `<button class="tile" data-act="open-game" data-id="${g.id}">
+    const quick = mine && me && me.status === "playing"
+      ? `<button type="button" class="quick" data-act="quick-hours" data-id="${g.id}" data-delta="1" aria-label="Add 1 hour to ${esc(g.title)}">+1h</button>` : "";
+    return `<div class="tile-wrap"><button class="tile" data-act="open-game" data-id="${g.id}">
       ${cart(g, { sticker: mine && S.status !== "all" ? "" : sticker })}
       <div class="tile-title">${esc(g.title)}</div>
       <div class="tile-meta">${meta}</div>
-    </button>`;
+    </button>${quick}</div>`;
   }
 
   function friendStats(id) {
@@ -440,6 +498,8 @@
       if (!idx.g[S.sheet.id]) return closeSheet();
       const box = $("#others"); if (box) box.innerHTML = othersReviews(S.sheet.id);
       const sc = $("#score"); if (sc) sc.outerHTML = scoreHTML(S.sheet.id);
+      const sess = $("#sessions"); const mine = myEntry(S.sheet.id);
+      if (sess && mine && mine.status !== "want") sess.innerHTML = sessionsHTML(mine);
     } else if (S.sheet.kind === "friend") {
       renderSheet();
     }
@@ -460,6 +520,7 @@
     else if (sh.kind === "add") html = addSheet(sh);
     else if (sh.kind === "edit") html = editSheet(sh.id);
     else if (sh.kind === "friend") html = friendSheet(sh.id);
+    else if (sh.kind === "finish") html = finishSheet(sh.id);
     layer().innerHTML = html;
     document.body.style.overflow = "hidden";
     const first = $(".sheet [autofocus]");
@@ -468,9 +529,17 @@
 
   function scoreHTML(id) {
     const sc = groupScore(id);
-    return `<div class="score" id="score">${sc
-      ? `<strong>${fmtRating(Math.round(sc.avg * 10) / 10)}</strong>${stars(sc.avg, 16)}<span>from ${sc.n} ${sc.n === 1 ? "rating" : "ratings"}</span>`
-      : `<span>No ratings yet</span>`}</div>`;
+    const c = catOf(idx.g[id]);
+    const critics = c && c.critic_score != null
+      ? `<div class="critics"><b>${Math.round(c.critic_score)}</b> Critics${c.critic_count ? ` (${c.critic_count} ${c.critic_count === 1 ? "review" : "reviews"})` : ""}</div>` : "";
+    return `<div id="score"><div class="score">${sc
+      ? `<strong>${fmtRating(Math.round(sc.avg * 10) / 10)}</strong>${stars(sc.avg, 16)}<span>from ${sc.n} ${sc.n === 1 ? "friend" : "friends"}</span>`
+      : `<span>No friend ratings yet</span>`}</div>${critics}</div>`;
+  }
+  function sessionsHTML(mine) {
+    return `<div class="sessions"><span>Log a session</span>${SESSION_STEPS.map((h) =>
+      `<button type="button" class="chip" data-act="quick-hours" data-id="${mine.game_id}" data-delta="${h}">+${h < 1 ? "30m" : h + "h"}</button>`).join("")}
+      <span class="subtle small">${mine.hours ? fmtHours(mine.hours) + " total" : ""}</span></div>`;
   }
 
   function gameSheet(id) {
@@ -478,16 +547,29 @@
     if (!g) return "";
     const mine = myEntry(id);
     if (!S.draft || S.draft.gameId !== id) {
-      S.draft = { gameId: id, status: mine ? mine.status : "playing", rating: mine ? mine.rating : null, hours: mine ? mine.hours : null, review: mine ? mine.review || "" : "" };
+      S.draft = {
+        gameId: id, status: mine ? mine.status : "playing", rating: mine ? mine.rating : null, hours: mine ? mine.hours : null,
+        review: mine ? mine.review || "" : "", spoiler: mine ? !!mine.spoiler : false,
+        started_at: mine ? mine.started_at || null : null, finished_at: mine ? mine.finished_at || null : null,
+        prevStatus: mine ? mine.status : null,
+      };
     }
     const d = S.draft;
+    const c = catOf(g);
     const facts = [g.platform, g.year].filter(Boolean).join(", ");
+    const showDates = d.started_at || d.finished_at || (mine && mine.status !== "want");
     return sheetFrame("", `
       <div class="game-hero">${cart(g)}<div>
         <h1>${esc(g.title)}</h1>
         <div class="facts">${esc(facts)}${facts ? "<br>" : ""}Added by ${esc(nameOf(g.added_by))}</div>
         ${scoreHTML(id)}
       </div></div>
+      ${c ? `<div class="about">
+        ${c.genres && c.genres.length ? `<div class="genres">${c.genres.slice(0, 4).map((x) => `<span>${esc(x)}</span>`).join("")}</div>` : ""}
+        ${c.summary ? `<p class="summary" id="summary">${esc(c.summary)}</p><button type="button" class="btn ghost more" data-act="more">More</button>` : ""}
+        <p class="credit">Game data from IGDB${c.igdb_url ? `. <a href="${esc(c.igdb_url)}" target="_blank" rel="noopener">View on IGDB</a>` : ""}</p>
+      </div>` : ""}
+      ${mine && mine.status !== "want" ? `<div id="sessions">${sessionsHTML(mine)}</div>` : ""}
 
       <form data-form="entry" data-id="${id}">
         <h2 class="section-title">${mine ? "Your log" : "Log it"}</h2>
@@ -501,6 +583,11 @@
         </div>
         <label class="field"><span>Hours played</span><input class="input" name="hours" type="number" inputmode="decimal" min="0" step="0.5" value="${d.hours == null ? "" : d.hours}" placeholder="Optional"></label>
         <label class="field"><span>Review</span><textarea class="input" name="review" maxlength="5000" placeholder="What did you think? Optional.">${esc(d.review)}</textarea></label>
+        <label class="check"><input type="checkbox" name="spoiler" ${d.spoiler ? "checked" : ""}> <span>Contains spoilers. Friends tap to read it.</span></label>
+        ${showDates ? `<div class="row">
+          <label class="field"><span>Started</span><input class="input" type="date" name="started_at" value="${dateInput(d.started_at)}"></label>
+          <label class="field"><span>Finished</span><input class="input" type="date" name="finished_at" value="${dateInput(d.finished_at)}"></label>
+        </div>` : ""}
         <p class="error" role="alert"></p>
         <button class="btn block" type="submit">${mine ? "Save changes" : "Add to my shelf"}</button>
         ${mine ? `<button type="button" class="btn danger block" data-act="remove-entry" data-id="${mine.id}">Remove from my shelf</button>` : ""}
@@ -531,15 +618,17 @@
     return others.map((e) => `<article class="review">
       <div class="review-head">${avatar(e.user_id)}<div>
         <div class="who">${esc(nameOf(e.user_id))}</div>
-        <div class="meta">${STATUS_LABEL[e.status]}${e.hours ? `, ${fmtHours(e.hours)}` : ""}, ${ago(e.updated_at)}</div>
+        <div class="meta">${STATUS_LABEL[e.status]}${e.status === "finished" && took(e) ? ` ${took(e)}` : ""}${e.hours ? `, ${fmtHours(e.hours)}` : ""}, ${ago(e.updated_at)}</div>
       </div></div>
       ${e.rating != null ? `<div style="margin-top:8px">${stars(e.rating, 16)}</div>` : ""}
-      ${e.review ? `<p>${esc(e.review)}</p>` : ""}
+      ${spoilerText(e, "review-text")}
     </article>`).join("");
   }
 
   function addSheet(sh) {
-    return sheetFrame("Add a game", `
+    if (sh.mode !== "manual") return catalogSheet(sh);
+    return sheetFrame("Add it by hand", `
+      <button type="button" class="btn ghost backlink" data-act="cat-back">${ICON.back}<span>Back to search</span></button>
       <form data-form="add" novalidate>
         <label class="field"><span>Title</span><input class="input" name="title" maxlength="120" required autofocus autocomplete="off" value="${esc(sh.title || "")}"></label>
         <div id="dupe"></div>
@@ -558,10 +647,92 @@
       </form>`);
   }
 
+  // S31: search the games database (also used to link an existing game: sh.linkId)
+  function catalogSheet(sh) {
+    const linking = !!sh.linkId;
+    const st = S.cat || {};
+    const picked = st.picked;
+    let body;
+    if (picked) {
+      const onShelf = idx.byIgdb[picked.igdb_id];
+      body = `<button type="button" class="btn ghost backlink" data-act="cat-unpick">${ICON.back}<span>Back to results</span></button>
+        <div class="picked">
+          ${picked.cover_image_id ? `<img src="${esc(IGDB_IMG(picked.cover_image_id, "cover_big"))}" alt="" referrerpolicy="no-referrer">` : cart({ id: "p" + picked.igdb_id, title: picked.name })}
+          <div><h3>${esc(picked.name)}</h3><div class="subtle small">${[picked.year, picked.platforms.slice(0, 5).join(", ")].filter(Boolean).map(esc).join("<br>")}</div></div>
+        </div>
+        ${onShelf && onShelf.id !== sh.linkId ? `<div class="suggest">${esc(onShelf.title)} is already on the shelf. <button type="button" data-act="open-game" data-id="${onShelf.id}">Open it</button></div>` : linking ? `
+        <p class="subtle">Link <b>${esc(idx.g[sh.linkId] ? idx.g[sh.linkId].title : "this game")}</b> to this entry? It gets this cover art, genres and critic score. Everyone's logs stay as they are.</p>
+        <p class="error" role="alert"></p>
+        <button class="btn block" data-act="cat-link">Link game</button>` : `
+        ${picked.platforms.length ? `<div class="field"><span>Which platform do you play on?</span>
+          <div class="chips wrap" role="group" aria-label="Platform">${picked.platforms.slice(0, 10).map((pf) =>
+            `<button type="button" class="chip" data-act="cat-platform" data-p="${esc(pf)}" aria-pressed="${st.platform === pf}">${esc(pf)}</button>`).join("")}</div></div>` : ""}
+        <div class="field"><span>Your status</span>
+          <div class="status-pick" role="group" aria-label="Your status">
+            ${[...STATUSES, { id: "none", label: "Just add it" }].map((x) => `<button type="button" data-act="pick-add-status" data-status="${x.id}" aria-pressed="${(sh.status || "playing") === x.id}">${x.label}</button>`).join("")}
+          </div></div>
+        <p class="error" role="alert"></p>
+        <button class="btn block" data-act="cat-add">Add to shelf</button>`}`;
+    } else {
+      body = `<label class="search"><span class="sr-only">Search the games database</span>${ICON.search}<input class="input" name="cat-q" type="search" placeholder="Search for a game" value="${esc(st.q || "")}" autofocus autocomplete="off" autocorrect="off" enterkeyhint="search"></label>
+        <div id="cat-results">${catalogResultsHTML(sh)}</div>
+        ${linking ? "" : `<p class="manual"><button type="button" class="btn ghost" data-act="cat-manual">Can't find it? Add it by hand</button></p>`}
+        <p class="credit">Game data from IGDB</p>`;
+    }
+    return sheetFrame(linking ? "Link to the games database" : "Add a game", body).replace('class="sheet"', 'class="sheet tall"');
+  }
+  function catalogResultsHTML(sh) {
+    const st = S.cat || {};
+    if (st.error) return `<div class="cat-msg" role="alert">${esc(st.error)}</div>`;
+    if (st.loading && !(st.results || []).length) return `<div class="cat-msg" role="status">Searching…</div>`;
+    if (!st.q || st.q.trim().length < 2) return `<div class="cat-msg">Type at least two letters of the title.</div>`;
+    if (!(st.results || []).length) return `<div class="cat-msg">No matches for "${esc(st.q)}".</div>`;
+    return `<ul class="cat-list${st.loading ? " is-loading" : ""}">${st.results.map((r) => {
+      const onShelf = idx.byIgdb[r.igdb_id];
+      return `<li><button type="button" data-act="cat-pick" data-igdb="${r.igdb_id}">
+        ${r.cover_image_id ? `<img src="${esc(IGDB_IMG(r.cover_image_id, "cover_small"))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="noart" aria-hidden="true"></span>`}
+        <span class="cat-text"><b>${esc(r.name)}</b><span>${[r.year, (r.platforms || []).slice(0, 4).join(", ")].filter(Boolean).map(esc).join(" · ")}</span></span>
+        ${onShelf && onShelf.id !== (sh && sh.linkId) ? `<span class="on-shelf">On the shelf</span>` : ""}
+      </button></li>`;
+    }).join("")}</ul>`;
+  }
+
+  // S21: the "Finished!" moment
+  function finishSheet(id) {
+    const g = idx.g[id];
+    const mine = myEntry(id);
+    if (!g || !mine) return "";
+    if (!S.draft || S.draft.gameId !== id) S.draft = { gameId: id, rating: mine.rating, review: mine.review || "", spoiler: !!mine.spoiler };
+    const d = S.draft;
+    const t = took(mine);
+    return sheetFrame("", `
+      <div class="finish-hero">${cart(g)}
+        <h1>You finished ${esc(g.title)}</h1>
+        <p class="subtle">${[t ? "You did it " + t : "", mine.hours ? fmtHours(mine.hours) + " played" : ""].filter(Boolean).join(", ") || "Nice one"}. How was it?</p>
+      </div>
+      <form data-form="finish" data-id="${id}">
+        <div class="field"><span>Your rating</span>
+          <div class="star-input" role="group" aria-label="Rating">${starInput(d.rating)}</div>
+          <div class="rating-readout">${d.rating != null ? `${fmtRating(d.rating)} out of 5` : "Tap a star. Tap its left half for a half star."}</div>
+        </div>
+        <label class="field"><span>One line for your friends</span><input class="input" name="review" maxlength="280" value="${esc(d.review)}" placeholder="e.g. Best ending I've played in years"></label>
+        <label class="check"><input type="checkbox" name="spoiler" ${d.spoiler ? "checked" : ""}> <span>Contains spoilers</span></label>
+        <p class="error" role="alert"></p>
+        <div class="row"><button type="button" class="btn secondary" data-act="open-game" data-id="${id}">Not now</button><button class="btn" type="submit">Save</button></div>
+      </form>`, `You finished ${g.title}`);
+  }
+
   function editSheet(id) {
     const g = idx.g[id];
     if (!g) return "";
-    return sheetFrame("Edit game details", `
+    const c = catOf(g);
+    const linkRow = S.api.catalogSearch ? `<div class="panel link-panel">
+        ${c ? `<p style="margin:0 0 10px">Linked to <b>${esc(c.name)}</b> in the games database.</p>
+          <div class="row"><button type="button" class="btn secondary" data-act="link-start" data-id="${id}">Change</button><button type="button" class="btn danger" data-act="unlink" data-id="${id}">Unlink</button></div>`
+        : `<p style="margin:0 0 10px">Not linked to the games database yet. Link it to get cover art, genres and the critic score.</p>
+          <button type="button" class="btn secondary block" data-act="link-start" data-id="${id}">Link to the games database</button>`}
+      </div>` : "";
+    return sheetFrame("Edit game details", `${linkRow}
       <form data-form="edit" data-id="${id}" novalidate>
         <label class="field"><span>Title</span><input class="input" name="title" maxlength="120" required value="${esc(g.title)}"></label>
         <div class="row">
@@ -643,7 +814,96 @@
     "status-filter"(el) { S.status = el.dataset.status; renderMain(); },
     "open-game"(el) { S.draft = null; openSheet({ kind: "game", id: el.dataset.id }); },
     "open-friend"(el) { openSheet({ kind: "friend", id: el.dataset.id }); },
-    "add-game"(el) { openSheet({ kind: "add", title: el.dataset.title || "", status: "playing" }); },
+    "add-game"(el) {
+      const title = el.dataset.title || "";
+      S.cat = { q: title, results: [], loading: false, error: null, picked: null, platform: null };
+      openSheet({ kind: "add", title, status: "playing", mode: S.api.catalogSearch ? "search" : "manual" });
+      if (title) runCatalogSearch(title);
+    },
+    "cat-manual"() {
+      const t = (S.cat && S.cat.q) || "";
+      openSheet({ ...S.sheet, mode: "manual", title: t });
+    },
+    "cat-back"() { openSheet({ ...S.sheet, mode: "search" }); },
+    async "cat-pick"(el) {
+      const id = Number(el.dataset.igdb);
+      const r = (S.cat.results || []).find((x) => x.igdb_id === id);
+      if (!r) return;
+      S.cat.picked = r; S.cat.platform = null;
+      renderSheet();
+    },
+    "cat-unpick"() { S.cat.picked = null; renderSheet(); },
+    "cat-platform"(el) {
+      S.cat.platform = S.cat.platform === el.dataset.p ? null : el.dataset.p;
+      el.parentElement.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.p === S.cat.platform));
+    },
+    async "cat-add"(el) {
+      const pk = S.cat.picked;
+      const err = $(".sheet .error");
+      await busy(el, async () => {
+        try {
+          const existing = idx.byIgdb[pk.igdb_id];
+          if (existing) { S.draft = null; return openSheet({ kind: "game", id: existing.id }); }
+          const full = await S.api.catalogGet(pk.igdb_id);
+          const year = full.first_release_date ? Number(String(full.first_release_date).slice(0, 4)) : pk.year || null;
+          let g;
+          try {
+            g = await S.api.addGame({ title: full.name || pk.name, platform: S.cat.platform || null, year, cover_url: null, igdb_id: pk.igdb_id });
+          } catch (e) {
+            if (/already on the shelf/i.test(e.message)) {
+              await reload();
+              const ex = idx.byIgdb[pk.igdb_id];
+              if (ex) { S.draft = null; return openSheet({ kind: "game", id: ex.id }); }
+            }
+            throw e;
+          }
+          const st = S.sheet.status || "playing";
+          if (st !== "none") await S.api.saveEntry(null, g.id, { status: st, rating: null, hours: null, review: null });
+          await reload();
+          S.draft = null; S.cat = null;
+          openSheet({ kind: "game", id: g.id });
+          toast("Game added");
+        } catch (e) {
+          if (err && err.isConnected) err.textContent = e.message; else toast(e.message);
+        }
+      });
+    },
+    "link-start"(el) {
+      S.cat = { q: idx.g[el.dataset.id] ? idx.g[el.dataset.id].title : "", results: [], loading: false, error: null, picked: null };
+      openSheet({ kind: "add", mode: "search", linkId: el.dataset.id });
+      if (S.cat.q) runCatalogSearch(S.cat.q);
+    },
+    async "cat-link"(el) {
+      const gameId = S.sheet.linkId, pk = S.cat.picked;
+      const err = $(".sheet .error");
+      await busy(el, async () => {
+        try {
+          await S.api.catalogGet(pk.igdb_id);
+          await S.api.linkGame(gameId, pk.igdb_id);
+          await reload();
+          S.cat = null; S.draft = null;
+          openSheet({ kind: "game", id: gameId });
+          toast("Game linked");
+        } catch (e) {
+          if (err && err.isConnected) err.textContent = e.message; else toast(e.message);
+        }
+      });
+    },
+    async unlink(el) {
+      const ok = await confirmDialog({ title: "Unlink this game?", body: "It loses the cover art, genres and critic score from the games database. Logs and reviews stay.", ok: "Unlink" });
+      if (!ok) return;
+      try { await S.api.linkGame(el.dataset.id, null); await reload(); renderSheet(); toast("Unlinked"); }
+      catch (e) { toast(e.message); }
+    },
+    async "quick-hours"(el) { quickHours(el.dataset.id, Number(el.dataset.delta)); },
+    reveal(el) {
+      const e = S.entries.find((x) => x.id === el.dataset.id);
+      if (!e) return;
+      S.revealed.add(e.id);
+      el.outerHTML = spoilerText(e, el.classList.contains("quote") ? "quote" : "review-text");
+    },
+    more(el) { const p = $("#summary"); if (p) { p.classList.toggle("open"); el.textContent = p.classList.contains("open") ? "Less" : "More"; } },
+    "update-refresh"() { applyUpdate(); },
     "edit-game"(el) { openSheet({ kind: "edit", id: el.dataset.id }); },
     close() { closeSheet(); },
     backdrop(el, ev) { if (ev.target === el) closeSheet(); },
@@ -662,16 +922,20 @@
         const r = el.getBoundingClientRect();
         if (ev.clientX - r.left < r.width / 2) val = n - 0.5;
       }
-      S.draft.rating = val;
       syncDraftFromForm();
+      S.draft.rating = val;
       rerenderEntryForm();
     },
     "clear-rating"() { syncDraftFromForm(); S.draft.rating = null; rerenderEntryForm(); },
     async "remove-entry"(el) {
       const ok = await confirmDialog({ title: "Remove from your shelf?", body: "Your status, rating, hours and review for this game will be deleted. The game stays on the group shelf.", ok: "Remove", danger: true });
       if (!ok) return;
-      try { await S.api.deleteEntry(el.dataset.id); S.draft = null; await reload(); renderSheet(); toast("Removed from your shelf"); }
-      catch (e) { toast(e.message); }
+      const id = el.dataset.id;
+      const before = S.entries.slice();
+      S.entries = S.entries.filter((x) => x.id !== id); S.draft = null; reindex(); renderMain(); renderSheet();
+      toast("Removed from your shelf");
+      try { await S.api.deleteEntry(id); syncSoon(); }
+      catch (e) { S.entries = before; reindex(); renderMain(); renderSheet(); toast(e.message); }
     },
     async "delete-game"(el) {
       const id = el.dataset.id;
@@ -687,8 +951,10 @@
     },
     async color(el) {
       const c = Number(el.dataset.color);
-      try { await S.api.updateProfile(S.me, { color: c }); await reload(); toast("Colour saved"); }
-      catch (e) { toast(e.message); }
+      const p = idx.p[S.me]; const prev = p ? p.color : null;
+      if (p) { p.color = c; renderMain(); }
+      try { await S.api.updateProfile(S.me, { color: c }); toast("Colour saved"); }
+      catch (e) { if (p) { p.color = prev; renderMain(); } toast(e.message); }
     },
     async "copy-link"() {
       try { await navigator.clipboard.writeText(location.origin + location.pathname); toast("Link copied"); }
@@ -701,7 +967,7 @@
     },
     "auth-mode"(el) { renderAuth(el.dataset.mode); },
     "start-demo"() { lsSet("sp-demo", "1"); start(); },
-    "exit-demo"() { lsSet("sp-demo", null); closeSheet(); if (location.search.includes("demo")) history.replaceState(null, "", location.pathname); start(); },
+    "exit-demo"() { lsSet("sp-demo", null); closeSheet(); if (location.search.includes("demo")) history.replaceState(null, "", location.pathname + location.hash); start(); },
     async "reset-demo"() {
       const ok = await confirmDialog({ title: "Reset demo data?", body: "Your demo changes will be replaced with the sample games.", ok: "Reset" });
       if (!ok) return;
@@ -711,11 +977,112 @@
   };
 
   function syncDraftFromForm() {
-    const f = $('form[data-form="entry"]');
+    const f = $('form[data-form="entry"], form[data-form="finish"]');
     if (!f || !S.draft) return;
-    const h = f.hours.value.trim();
-    S.draft.hours = h === "" ? null : Number(h);
-    S.draft.review = f.review.value;
+    if (f.hours) { const h = f.hours.value.trim(); S.draft.hours = h === "" ? null : Number(h); }
+    if (f.review) S.draft.review = f.review.value;
+    if (f.spoiler) S.draft.spoiler = f.spoiler.checked;
+    if (f.started_at) S.draft.started_at = fromDateInput(f.started_at.value);
+    if (f.finished_at) S.draft.finished_at = fromDateInput(f.finished_at.value);
+  }
+
+  // ---------------- S18: instant saves ----------------
+  const syncSoon = debounce(() => reload().catch(() => {}), 1500);
+
+  function applyLocalEntry(gameId, fields) {
+    const now = new Date().toISOString();
+    let e = myEntry(gameId);
+    const prev = e ? e.status : null;
+    if (!e) {
+      e = { id: "tmp-" + Math.random().toString(36).slice(2), game_id: gameId, user_id: S.me, rating: null, hours: null, review: null, spoiler: false, started_at: null, finished_at: null, created_at: now };
+      S.entries.push(e);
+    }
+    Object.assign(e, fields, { updated_at: now });
+    if (e.status === "playing" && !e.started_at && prev !== "playing") e.started_at = now;
+    if (e.status === "finished" && !e.finished_at && prev !== "finished") e.finished_at = now;
+    reindex();
+    return e;
+  }
+
+  // Runs saves for one game one at a time, so a quick second save never races the first.
+  function queueFor(gameId, fn) {
+    const prev = S.pending[gameId] || Promise.resolve();
+    const next = prev.catch(() => {}).then(fn);
+    S.pending[gameId] = next;
+    next.finally(() => { if (S.pending[gameId] === next) delete S.pending[gameId]; }).catch(() => {});
+    return next;
+  }
+
+  async function saveEntryOptimistic(gameId, fields, okMsg) {
+    const snapshot = JSON.stringify(S.entries);
+    applyLocalEntry(gameId, fields);
+    renderMain();
+    try {
+      await queueFor(gameId, async () => {
+        const live = myEntry(gameId);
+        const realId = live && !String(live.id).startsWith("tmp-") ? live.id : null;
+        await S.api.saveEntry(realId, gameId, fields);
+        if (!realId) await reload(); // swap the temporary entry for the real one
+      });
+      if (okMsg) toast(okMsg);
+      syncSoon();
+      return true;
+    } catch (e) {
+      S.entries = JSON.parse(snapshot); reindex(); renderMain();
+      if (S.sheet) renderSheet();
+      toast(e.message || "Couldn't save. Check your connection and try again.");
+      return false;
+    }
+  }
+
+  // S17: quick session buttons
+  async function quickHours(gameId, delta) {
+    const e = myEntry(gameId);
+    if (!e || !delta) return;
+    const before = e.hours;
+    e.hours = Math.round(Math.min(99999, Math.max(0, (e.hours || 0) + delta)) * 10) / 10;
+    e.updated_at = new Date().toISOString();
+    reindex(); renderMain(); refreshOpenSheet();
+    if (S.draft && S.draft.gameId === gameId) { S.draft.hours = e.hours; const f = $('form[data-form="entry"]'); if (f && f.hours) f.hours.value = e.hours; }
+    const g = idx.g[gameId];
+    toast(`+${delta < 1 ? "30m" : delta + "h"} on ${g ? g.title : "this game"} (${fmtHours(e.hours)} total)`);
+    try {
+      await queueFor(gameId, async () => {
+        const live = myEntry(gameId);
+        if (String(live.id).startsWith("tmp-")) await reload();
+        const real = myEntry(gameId);
+        const total = await S.api.addHours(real.id, delta);
+        real.hours = total;
+      });
+      syncSoon();
+    } catch (err) {
+      const cur = myEntry(gameId); if (cur) cur.hours = before;
+      reindex(); renderMain(); refreshOpenSheet();
+      toast(err.message);
+    }
+  }
+
+  // S31: catalogue search (debounced, latest query wins)
+  let catTimer = null, catSeq = 0;
+  function runCatalogSearch(q) {
+    if (!S.cat) return;
+    S.cat.q = q; S.cat.error = null;
+    clearTimeout(catTimer);
+    const box = () => $("#cat-results");
+    if (q.trim().length < 2) { S.cat.results = []; S.cat.loading = false; if (box()) box().innerHTML = catalogResultsHTML(S.sheet); return; }
+    S.cat.loading = true; if (box()) box().innerHTML = catalogResultsHTML(S.sheet);
+    catTimer = setTimeout(async () => {
+      const mySeq = ++catSeq;
+      try {
+        const results = await S.api.catalogSearch(q);
+        if (mySeq !== catSeq || !S.cat) return;
+        S.cat.results = results; S.cat.loading = false;
+      } catch (e) {
+        if (mySeq !== catSeq || !S.cat) return;
+        S.cat.results = []; S.cat.loading = false; S.cat.error = e.message;
+      }
+      if (box()) box().innerHTML = catalogResultsHTML(S.sheet);
+    }, 350);
   }
   function rerenderEntryForm() {
     const sheet = $(".sheet");
@@ -754,17 +1121,33 @@
       syncDraftFromForm();
       const d = S.draft;
       if (d.hours != null && (!isFinite(d.hours) || d.hours < 0)) throw new Error("Hours should be a number like 12 or 3.5.");
+      if (d.started_at && d.finished_at && d.finished_at < d.started_at) throw new Error("The finish date is before the start date.");
       const mine = myEntry(d.gameId);
-      await S.api.saveEntry(mine ? mine.id : null, d.gameId, {
+      const fields = {
         status: d.status,
         rating: d.rating,
         hours: d.hours == null ? null : Math.round(d.hours * 10) / 10,
         review: d.review.trim() || null,
-      });
+        spoiler: !!d.spoiler && !!d.review.trim(),
+      };
+      if (mine || d.started_at) fields.started_at = d.started_at || null;
+      if (mine || d.finished_at) fields.finished_at = d.finished_at || null;
+      const justFinished = d.status === "finished" && d.prevStatus !== "finished";
+      const gameId = d.gameId;
       S.draft = null;
-      await reload();
-      renderSheet();
-      toast(mine ? "Changes saved" : "Added to your shelf");
+      const ok = saveEntryOptimistic(gameId, fields, mine ? "Changes saved" : "Added to your shelf");
+      if (justFinished && (fields.rating == null || !fields.review)) openSheet({ kind: "finish", id: gameId });
+      else renderSheet();
+      await ok;
+    },
+    async finish(f) {
+      syncDraftFromForm();
+      const d = S.draft, gameId = f.dataset.id;
+      const review = (d.review || "").trim();
+      S.draft = null;
+      const saving = saveEntryOptimistic(gameId, { rating: d.rating, review: review || null, spoiler: !!d.spoiler && !!review }, "Saved. Nice work finishing it.");
+      openSheet({ kind: "game", id: gameId });
+      await saving;
     },
     async add(f) {
       const fields = gameFields(f);
@@ -774,7 +1157,7 @@
       const st = S.sheet.status || "playing";
       if (st !== "none") await S.api.saveEntry(null, g.id, { status: st, rating: null, hours: null, review: null });
       await reload();
-      S.draft = null;
+      S.draft = null; S.cat = null;
       openSheet({ kind: "game", id: g.id });
       toast("Game added");
     },
@@ -840,6 +1223,7 @@
   document.addEventListener("input", (ev) => {
     const t = ev.target;
     if (t.name === "q") { S.search = t.value; const box = $("#shelf-results"); if (box) box.innerHTML = shelfResults(); return; }
+    if (t.name === "cat-q") { runCatalogSearch(t.value); return; }
     if (t.form && t.form.dataset.form === "add" && t.name === "title") {
       const box = $("#dupe");
       const q = norm(t.value);
@@ -854,18 +1238,81 @@
     if (ev.key === "Escape" && S.sheet && !$(".dialog")) closeSheet();
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && S.me && Date.now() - S.lastLoad > 20000) reload().catch(() => {});
+    if (document.visibilityState === "hidden") { if (S.me) lsSet("sp-seen", new Date().toISOString()); return; }
+    if (S.me && Date.now() - S.lastLoad > 20000) reload().catch(() => {});
+    if (swReg) swReg.update().catch(() => {});
   });
+  window.addEventListener("pagehide", () => { if (S.me) lsSet("sp-seen", new Date().toISOString()); });
+
+  // ---------------- S19: gestures ----------------
+  // Swipe a sheet down to close it.
+  let drag = null;
+  document.addEventListener("touchstart", (ev) => {
+    const sheet = ev.target.closest(".sheet");
+    if (sheet) {
+      if (sheet.scrollTop > 0 || ev.target.closest("textarea, input, select, .star-input")) return;
+      drag = { kind: "sheet", el: sheet, y0: ev.touches[0].clientY, x0: ev.touches[0].clientX, t0: Date.now(), dy: 0 };
+      return;
+    }
+    if (S.sheet || !S.me || !$("#main") || window.scrollY > 0 || $(".backdrop")) return;
+    drag = { kind: "ptr", y0: ev.touches[0].clientY, x0: ev.touches[0].clientX, dy: 0 };
+  }, { passive: true });
+  document.addEventListener("touchmove", (ev) => {
+    if (!drag) return;
+    const dy = ev.touches[0].clientY - drag.y0, dx = ev.touches[0].clientX - drag.x0;
+    if (drag.dy === 0 && Math.abs(dx) > Math.abs(dy)) { drag = null; return; }
+    if (dy <= 0) { if (drag.kind === "sheet") drag.el.style.transform = ""; drag.dy = 0; updatePtr(0); return; }
+    drag.dy = dy;
+    if (ev.cancelable) ev.preventDefault();
+    if (drag.kind === "sheet") { drag.el.style.transition = "none"; drag.el.style.transform = `translateY(${dy}px)`; }
+    else updatePtr(dy);
+  }, { passive: false });
+  document.addEventListener("touchend", () => {
+    if (!drag) return;
+    const d = drag; drag = null;
+    if (d.kind === "sheet") {
+      const fast = d.dy / Math.max(1, Date.now() - d.t0) > 0.6;
+      d.el.style.transition = "transform 0.2s ease";
+      if (d.dy > 110 || (fast && d.dy > 40)) { d.el.style.transform = "translateY(100%)"; setTimeout(closeSheet, 180); }
+      else d.el.style.transform = "";
+    } else {
+      if (d.dy > 70) { updatePtr(70, "Refreshing…"); reload().catch(() => toast("Couldn't refresh. Check your connection.")).finally(() => updatePtr(0)); }
+      else updatePtr(0);
+    }
+  });
+  function updatePtr(dy, label) {
+    const el = $("#ptr");
+    if (!el) return;
+    const h = Math.min(dy, 90);
+    el.style.height = h + "px";
+    el.classList.toggle("ready", dy > 70);
+    el.firstElementChild.textContent = label || (dy > 70 ? "Release to refresh" : "Pull to refresh");
+  }
+
+  // ---------------- S29: update banner ----------------
+  let swReg = null;
+  function showUpdateBanner() {
+    if ($(".update-bar")) return;
+    const el = document.createElement("div");
+    el.className = "update-bar"; el.setAttribute("role", "status");
+    el.innerHTML = `<span>A new version of Save Point is ready.</span><button class="btn" data-act="update-refresh">Refresh</button>`;
+    document.body.appendChild(el);
+  }
+  function applyUpdate() {
+    if (swReg && swReg.waiting) swReg.waiting.postMessage({ type: "SKIP_WAITING" });
+    else location.reload();
+  }
 
   // ---------------- Start ----------------
   async function start() {
     renderLoading();
     if (S.api && S.api.unsubscribe) S.api.unsubscribe();
     const params = new URLSearchParams(location.search);
-    if (params.has("demo")) lsSet("sp-demo", "1");
     const cfg = window.SAVEPOINT_CONFIG || {};
     const configured = cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase;
-    if (lsGet("sp-demo") === "1") {
+    // S1: a working setup always opens the real app; demo only via ?demo, or the demo button when not set up.
+    if (configured && !params.has("demo")) lsSet("sp-demo", null);
+    if (params.has("demo") || (!configured && lsGet("sp-demo") === "1")) {
       S.api = new DemoApi();
       return afterSignIn();
     }
@@ -880,6 +1327,18 @@
   start();
 
   if ("serviceWorker" in navigator && location.protocol === "https:") {
-    window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(() => {}));
+    let reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => { if (!reloading) { reloading = true; location.reload(); } });
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").then((reg) => {
+        swReg = reg;
+        if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner();
+        reg.addEventListener("updatefound", () => {
+          const w = reg.installing;
+          if (!w) return;
+          w.addEventListener("statechange", () => { if (w.state === "installed" && navigator.serviceWorker.controller) showUpdateBanner(); });
+        });
+      }).catch(() => {});
+    });
   }
 })();

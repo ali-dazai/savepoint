@@ -12,7 +12,18 @@
     if (/Password should be/i.test(m)) return "Use a password with at least 6 characters.";
     if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return "Can't reach the server. Check your connection and try again.";
     if (/Email not confirmed/i.test(m)) return "Confirm your email first: open the link we sent you, then sign in.";
+    if (/games_igdb_id_key/i.test(m)) return "That game is already on the shelf.";
     return m;
+  }
+
+  const CATALOG_ERRORS = {
+    sign_in_required: "Sign in again to search the games database.",
+    not_a_member: "Join the group to search the games database.",
+    igdb_busy: "The games database is busy. Try again in a moment.",
+    not_found: "That game isn't in the games database any more.",
+  };
+  function catalogError(code) {
+    return new Error(CATALOG_ERRORS[code] || "Can't reach the games database right now. You can still add the game by hand.");
   }
 
   // ---------------- Supabase ----------------
@@ -60,10 +71,11 @@
       if (error) throw new Error(errMsg(error));
     }
     async loadAll() {
-      const [p, g, e] = await Promise.all([
+      const [p, g, e, c] = await Promise.all([
         this.sb.from("profiles").select("id, display_name, color, created_at"),
-        this.sb.from("games").select("id, title, platform, year, cover_url, added_by, created_at"),
-        this.sb.from("entries").select("id, game_id, user_id, status, rating, hours, review, created_at, updated_at"),
+        this.sb.from("games").select("id, title, platform, year, cover_url, added_by, created_at, igdb_id"),
+        this.sb.from("entries").select("id, game_id, user_id, status, rating, hours, review, spoiler, started_at, finished_at, created_at, updated_at"),
+        this.sb.from("catalog_games").select("igdb_id, name, cover_image_id, first_release_date, platforms, genres, summary, critic_score, critic_count, igdb_url, steam_appid, similar_ids"),
       ]);
       const err = p.error || g.error || e.error;
       if (err) throw new Error(errMsg(err));
@@ -71,6 +83,7 @@
         profiles: p.data,
         games: g.data,
         entries: e.data.map((x) => ({ ...x, rating: x.rating == null ? null : Number(x.rating), hours: x.hours == null ? null : Number(x.hours) })),
+        catalog: c.error ? [] : c.data.map((x) => ({ ...x, critic_score: x.critic_score == null ? null : Number(x.critic_score) })),
       };
     }
     async addGame(fields) {
@@ -104,6 +117,29 @@
       const { error } = await this.sb.from("profiles").update(fields).eq("id", userId);
       if (error) throw new Error(errMsg(error));
     }
+    async addHours(entryId, delta) {
+      const { data, error } = await this.sb.rpc("add_hours", { entry: entryId, delta });
+      if (error) throw new Error(errMsg(error));
+      if (data == null) throw new Error("Couldn't update your hours. Pull down to refresh and try again.");
+      return Number(data);
+    }
+    async linkGame(gameId, igdbId) {
+      const { error } = await this.sb.from("games").update({ igdb_id: igdbId }).eq("id", gameId);
+      if (error) throw new Error(errMsg(error));
+    }
+    async catalog(body) {
+      let res;
+      try { res = await this.sb.functions.invoke("catalog", { body }); }
+      catch (_) { throw catalogError(); }
+      if (res.error) {
+        let code = null;
+        try { code = (await res.error.context.json()).error; } catch (_) {}
+        throw catalogError(code);
+      }
+      return res.data;
+    }
+    async catalogSearch(q) { return (await this.catalog({ action: "search", q })).results || []; }
+    async catalogGet(igdbId) { return (await this.catalog({ action: "get", igdb_id: igdbId })).game; }
     subscribe(onChange) {
       this.unsubscribe();
       try {
@@ -120,7 +156,7 @@
   }
 
   // ---------------- Demo ----------------
-  const DEMO_KEY = "savepoint-demo-v1";
+  const DEMO_KEY = "savepoint-demo-v2";
   const ME = "demo-me";
 
   function uid() {
@@ -147,7 +183,10 @@
     }));
     const E = [];
     const add = (g, u, status, rating, hours, review, d, h) =>
-      E.push({ id: uid(), game_id: "g" + g, user_id: u, status, rating, hours, review, created_at: daysAgo(d + 5, h), updated_at: daysAgo(d, h) });
+      E.push({ id: uid(), game_id: "g" + g, user_id: u, status, rating, hours, review, spoiler: false,
+        started_at: status === "want" ? null : daysAgo(d + 5 + Math.round((hours || 0) / 3), h),
+        finished_at: status === "finished" ? daysAgo(d, h) : null,
+        created_at: daysAgo(d + 5, h), updated_at: daysAgo(d, h) });
     add(0, "demo-maya", "playing", null, 22, "", 0, 2);
     add(1, "demo-jon", "finished", 4.5, 31, "One more run turned into 3am. The joker synergies are absurd once you see them.", 0, 5);
     add(2, ME, "finished", 5, 118, "Stormveil alone is worth it. Took me 40 tries on Malenia and I'd do it again.", 1, 1);
@@ -156,7 +195,8 @@
     add(4, "demo-maya", "finished", 5, 140, "Played a bard who solved every fight by talking. Best RPG in years.", 4, 0);
     add(4, ME, "playing", null, 35, "", 0, 8);
     add(5, "demo-jon", "want", null, null, "", 5, 0);
-    add(6, "demo-priya", "finished", 5, 25, "Go in knowing nothing. That's the whole review.", 6, 0);
+    add(6, "demo-priya", "finished", 5, 25, "The ending loops you back to the very first campfire, and it finally makes sense.", 6, 0);
+    E[E.length - 1].spoiler = true;
     add(6, ME, "want", null, null, "", 6, 4);
     add(7, "demo-maya", "playing", null, 80, "", 1, 6);
     add(7, "demo-jon", "dropped", 2.5, 9, "Farming isn't for me, but I see the appeal.", 9, 0);
@@ -167,6 +207,16 @@
     add(11, "demo-priya", "finished", 4, 10, "Zone mode in VR is something else.", 12, 0);
     return { profiles: P, games: G, entries: E };
   }
+
+  const DEMO_CATALOG = [
+    { igdb_id: 9001, name: "Hades II", year: 2025, platforms: ["PC", "Switch", "PS5"], genres: ["Roguelike", "Action"], summary: "Battle beyond the Underworld as the Princess of the Underworld.", critic_score: 94, critic_count: 60 },
+    { igdb_id: 9002, name: "Hollow Knight", year: 2017, platforms: ["PC", "Switch", "PS4", "XONE"], genres: ["Metroidvania", "Platform"], summary: "Forge your own path in an epic action adventure through a ruined kingdom of insects.", critic_score: 88, critic_count: 70 },
+    { igdb_id: 9003, name: "Hollow Knight: Silksong", year: 2025, platforms: ["PC", "Switch", "PS5"], genres: ["Metroidvania"], summary: "Play as Hornet and explore a vast haunted kingdom.", critic_score: 91, critic_count: 80 },
+    { igdb_id: 9004, name: "Elden Ring", year: 2022, platforms: ["PC", "PS5", "XSX"], genres: ["RPG", "Adventure"], summary: "Rise, Tarnished, and be guided by grace.", critic_score: 95, critic_count: 90 },
+    { igdb_id: 9005, name: "Zelda: Tears of the Kingdom", year: 2023, platforms: ["Switch"], genres: ["Adventure"], summary: "An epic adventure across the land and skies of Hyrule.", critic_score: 96, critic_count: 100 },
+    { igdb_id: 9006, name: "Halo Infinite", year: 2021, platforms: ["PC", "XSX"], genres: ["Shooter"], summary: "Master Chief returns.", critic_score: 84, critic_count: 70 },
+    { igdb_id: 9007, name: "Stardew Valley", year: 2016, platforms: ["PC", "Switch", "PS4", "iOS"], genres: ["Simulator", "RPG"], summary: "You've inherited your grandfather's old farm plot.", critic_score: 89, critic_count: 40 },
+  ];
 
   class DemoApi {
     constructor() {
@@ -184,9 +234,40 @@
     async session() { return { userId: ME, email: "demo@example.com" }; }
     onAuthChange() {}
     async isMember() { return true; }
-    async loadAll() { return JSON.parse(JSON.stringify(this.db)); }
+    async loadAll() {
+      const copy = JSON.parse(JSON.stringify(this.db));
+      copy.catalog = copy.catalog || [];
+      return copy;
+    }
+    async catalogSearch(q) {
+      await new Promise((r) => setTimeout(r, 250));
+      const n = String(q || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+      if (n.length < 2) return [];
+      return DEMO_CATALOG.filter((g) => g.name.toLowerCase().replace(/[^a-z0-9]+/g, "").includes(n))
+        .map((g) => ({ igdb_id: g.igdb_id, name: g.name, year: g.year, cover_image_id: null, platforms: g.platforms }));
+    }
+    async catalogGet(igdbId) {
+      const g = DEMO_CATALOG.find((x) => x.igdb_id === igdbId);
+      if (!g) throw new Error("That game isn't in the games database any more.");
+      const row = { igdb_id: g.igdb_id, name: g.name, cover_image_id: null, first_release_date: g.year + "-06-01", platforms: g.platforms, genres: g.genres, summary: g.summary, critic_score: g.critic_score, critic_count: g.critic_count, igdb_url: null, steam_appid: null, similar_ids: [] };
+      this.db.catalog = (this.db.catalog || []).filter((x) => x.igdb_id !== igdbId).concat(row);
+      this.save();
+      return row;
+    }
+    async linkGame(gameId, igdbId) {
+      if (igdbId != null && this.db.games.some((x) => x.igdb_id === igdbId && x.id !== gameId)) throw new Error("That game is already on the shelf.");
+      const g = this.db.games.find((x) => x.id === gameId); if (g) g.igdb_id = igdbId; this.save();
+    }
+    async addHours(entryId, delta) {
+      const e = this.db.entries.find((x) => x.id === entryId && x.user_id === ME);
+      if (!e) throw new Error("Couldn't update your hours.");
+      e.hours = Math.round(Math.min(99999, Math.max(0, (e.hours || 0) + delta)) * 10) / 10;
+      e.updated_at = new Date().toISOString(); this.save();
+      return e.hours;
+    }
     async addGame(fields) {
-      const g = { id: uid(), cover_url: null, platform: null, year: null, ...fields, added_by: ME, created_at: new Date().toISOString() };
+      if (fields.igdb_id != null && this.db.games.some((x) => x.igdb_id === fields.igdb_id)) throw new Error("That game is already on the shelf.");
+      const g = { id: uid(), cover_url: null, platform: null, year: null, igdb_id: null, ...fields, added_by: ME, created_at: new Date().toISOString() };
       this.db.games.push(g); this.save(); return g;
     }
     async updateGame(id, fields) {
@@ -201,8 +282,12 @@
     async saveEntry(existingId, gameId, fields) {
       const now = new Date().toISOString();
       const e = existingId && this.db.entries.find((x) => x.id === existingId);
-      if (e) Object.assign(e, fields, { updated_at: now });
-      else this.db.entries.push({ id: uid(), game_id: gameId, user_id: ME, rating: null, hours: null, review: null, ...fields, created_at: now, updated_at: now });
+      const prev = e ? e.status : null;
+      const row = e || { id: uid(), game_id: gameId, user_id: ME, rating: null, hours: null, review: null, spoiler: false, started_at: null, finished_at: null, created_at: now };
+      Object.assign(row, fields, { updated_at: now });
+      if (row.status === "playing" && !row.started_at && prev !== "playing") row.started_at = now;
+      if (row.status === "finished" && !row.finished_at && prev !== "finished") row.finished_at = now;
+      if (!e) this.db.entries.push(row);
       this.save();
     }
     async deleteEntry(id) { this.db.entries = this.db.entries.filter((x) => x.id !== id); this.save(); }
