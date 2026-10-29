@@ -55,6 +55,8 @@
     revealed: new Set(),   // S24: spoiler reviews tapped open this session
     pending: {},           // S18: in-flight saves per game, so they never overlap
     cat: null,             // S31: catalogue search state for the open Add/Link sheet
+    similar: null,         // S26: { key, games } IGDB games similar to ones you loved
+    share: null,           // S27: { gameId, include, url, blob, busy }
   };
   let idx = { p: {}, g: {}, byGame: {}, c: {}, byIgdb: {} };
 
@@ -145,12 +147,15 @@
     const letter = p ? (p.display_name.trim()[0] || "?").toUpperCase() : "?";
     return `<span class="avatar ${cls}" style="--c:${col}" aria-hidden="true">${esc(letter)}</span>`;
   }
-  function cart(game, opts = {}) {
-    const key = game.id || game.title;
-    const h = hash(String(key));
+  function cartColors(game) {
+    const h = hash(String(game.id || game.title));
     const pl = PLASTIC[h % 8];
     const bandIdx = (h >>> 5) % 9;
-    const band = bandIdx === 8 || bandIdx === h % 8 ? INK : PLASTIC[bandIdx].c;
+    return { c: pl.c, d: pl.d, band: bandIdx === 8 || bandIdx === h % 8 ? INK : PLASTIC[bandIdx].c };
+  }
+  function cart(game, opts = {}) {
+    const col = cartColors(game);
+    const pl = col, band = col.band;
     const t = game.title || "";
     const tk = t.length <= 6 ? 19 : t.length <= 10 ? 16 : t.length <= 16 ? 13.5 : t.length <= 26 ? 11.5 : 10;
     const meta = [game.platform, game.year].filter(Boolean).join(" ");
@@ -176,6 +181,108 @@
       return `<button type="button" class="${cls} spoiler" data-act="reveal" data-id="${e.id}"><span>Contains spoilers. Tap to show.</span></button>`;
     }
     return `<div class="${cls}">${e.spoiler ? '<span class="spoiler-tag">Spoilers</span> ' : ""}${esc(e.review)}</div>`;
+  }
+
+  // ---------------- S26: taste match + picks ----------------
+  // Agreement between you and a friend over games you've both rated: 100% = identical ratings.
+  function taste(friendId) {
+    if (!S.me || friendId === S.me) return null;
+    const mine = {}, pairs = [];
+    S.entries.forEach((e) => { if (e.user_id === S.me && e.rating != null) mine[e.game_id] = e.rating; });
+    S.entries.forEach((e) => {
+      if (e.user_id === friendId && e.rating != null && mine[e.game_id] != null) pairs.push({ gameId: e.game_id, me: mine[e.game_id], them: e.rating });
+    });
+    if (pairs.length < 2) return { n: pairs.length, pct: null, pairs };
+    const diff = pairs.reduce((a, p) => a + Math.abs(p.me - p.them), 0) / pairs.length;
+    return { n: pairs.length, pct: Math.round(100 * (1 - diff / 4.5)), pairs };
+  }
+
+  // Games on the shelf you haven't logged that friends rated highly, weighted by how much your tastes agree.
+  function friendPicks() {
+    const logged = new Set(S.entries.filter((e) => e.user_id === S.me).map((e) => e.game_id));
+    const tastes = {};
+    S.profiles.forEach((p) => { if (p.id !== S.me) tastes[p.id] = taste(p.id); });
+    const out = [];
+    S.games.forEach((g) => {
+      if (logged.has(g.id)) return;
+      const rated = (idx.byGame[g.id] || []).filter((e) => e.user_id !== S.me && e.rating != null);
+      if (!rated.length) return;
+      let wsum = 0, sum = 0, best = null;
+      rated.forEach((e) => {
+        const t = tastes[e.user_id];
+        const w = t && t.pct != null ? Math.max(0.15, t.pct / 100) : 0.6;
+        wsum += w; sum += w * e.rating;
+        const strength = e.rating * w;
+        if (!best || strength > best.strength) best = { e, t, strength };
+      });
+      const score = sum / wsum;
+      if (score < 3.5) return;
+      const b = best.e, bt = best.t;
+      const reason = `${nameOf(b.user_id)} rated it ${fmtRating(b.rating)}${bt && bt.pct != null && bt.pct >= 60 ? `, ${bt.pct}% match` : ""}`;
+      out.push({ kind: "friend", game: g, score: score + rated.length * 0.05, reason });
+    });
+    return out.sort((a, b) => b.score - a.score);
+  }
+
+  // Liked games (yours, 3.5+) that are linked to the catalogue, and the IGDB "similar" ids they point to.
+  function similarSeeds() {
+    const liked = S.entries.filter((e) => e.user_id === S.me && e.rating != null && e.rating >= 3.5)
+      .map((e) => ({ e, g: idx.g[e.game_id] })).filter((x) => x.g && catOf(x.g))
+      .sort((a, b) => b.e.rating - a.e.rating);
+    const counts = new Map(), from = new Map();
+    liked.forEach(({ g }) => {
+      (catOf(g).similar_ids || []).forEach((id) => {
+        if (idx.byIgdb[id]) return; // already on the shelf
+        counts.set(id, (counts.get(id) || 0) + 1);
+        if (!from.has(id)) from.set(id, []);
+        from.get(id).push(g.title);
+      });
+    });
+    const ids = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a) || a - b).slice(0, 30);
+    return { ids, counts, from };
+  }
+
+  let similarLoading = false;
+  async function loadSimilar() {
+    if (!S.api || !S.api.catalogSimilar || similarLoading) return;
+    const { ids } = similarSeeds();
+    if (!ids.length) { S.similar = { key: "", games: [] }; return; }
+    const key = ids.slice().sort((a, b) => a - b).join(",");
+    if (S.similar && S.similar.key === key) return;
+    const cached = safeJson(lsGet("sp-sim"));
+    if (cached && cached.key === key && Date.now() - cached.at < 864e5) { S.similar = cached; if (S.tab === "feed") renderMain(); return; }
+    similarLoading = true;
+    try {
+      const games = await S.api.catalogSimilar(ids);
+      S.similar = { key, games, at: Date.now() };
+      lsSet("sp-sim", JSON.stringify(S.similar));
+      if (S.tab === "feed" && !S.sheet) renderMain();
+    } catch (_) { /* picks are a nice-to-have; stay quiet */ }
+    finally { similarLoading = false; }
+  }
+
+  function similarPicks() {
+    if (!S.similar || !S.similar.games.length) return [];
+    const { counts, from } = similarSeeds();
+    return S.similar.games
+      .filter((r) => !idx.byIgdb[r.igdb_id] && counts.has(r.igdb_id))
+      .map((r) => {
+        const titles = from.get(r.igdb_id) || [];
+        return { kind: "similar", row: r, score: counts.get(r.igdb_id) + (r.critic_score || 70) / 100,
+          reason: `Like ${titles.slice(0, 2).join(" and ")}` };
+      })
+      .sort((a, b) => b.score - a.score);
+  }
+
+  function picksFor() {
+    const fp = friendPicks().slice(0, 6);
+    const sp = similarPicks().slice(0, 10 - fp.length);
+    return fp.concat(sp);
+  }
+
+  function pickReason(gameId) {
+    const p = friendPicks().find((x) => x.game.id === gameId);
+    return p ? p.reason : "";
   }
 
   // ---------------- Screens: boot / auth ----------------
@@ -270,6 +377,7 @@
     reindex();
     renderMain();
     refreshOpenSheet();
+    loadSimilar();
   }
   function debounce(fn, ms) { let t; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
 
@@ -333,7 +441,32 @@
       ? `<h2 class="section-title">Latest${newCount ? ` <span class="new-count">${newCount} new</span>` : ""}</h2><ul class="feed">${rows}</ul>`
       : emptyState("Nothing logged yet", "Add a game you're playing and it'll show up here for everyone.", "Add a game");
 
-    return topbar("Feed") + strip + list;
+    const picks = picksFor();
+    const myRated = S.entries.filter((e) => e.user_id === S.me && e.rating != null).length;
+    const picksHTML = picks.length
+      ? `<h2 class="section-title">Picks for you</h2>
+         <div class="now-playing picks">${picks.map(pickCard).join("")}</div>`
+      : S.entries.some((e) => e.user_id === S.me) && myRated < 2
+        ? `<p class="nudge">Rate a couple of games and you'll get picks here, based on your friends' ratings and games like the ones you love.</p>` : "";
+
+    return topbar("Feed") + strip + picksHTML + list;
+  }
+
+  function pickCard(p) {
+    if (p.kind === "friend") {
+      return `<button class="np pick" data-act="open-game" data-id="${p.game.id}" aria-label="${esc(p.game.title)}: ${esc(p.reason)}">
+        ${cart(p.game)}
+        <div class="pick-title">${esc(p.game.title)}</div>
+        <div class="pick-why">${esc(p.reason)}</div>
+      </button>`;
+    }
+    const r = p.row;
+    const fake = { id: "igdb" + r.igdb_id, title: r.name, year: r.year, cover_url: r.cover_image_id ? IGDB_IMG(r.cover_image_id, "cover_big") : null };
+    return `<button class="np pick" data-act="pick-external" data-igdb="${r.igdb_id}" aria-label="${esc(r.name)}: ${esc(p.reason)}">
+      ${cart(fake)}
+      <div class="pick-title">${esc(r.name)}</div>
+      <div class="pick-why">${esc(p.reason)}</div>
+    </button>`;
   }
 
   function feedItem(e, fresh) {
@@ -448,9 +581,11 @@
       if (st.playing) bits.push(`${st.playing} playing`);
       bits.push(`${st.es.length} logged`);
       if (st.hours) bits.push(`${Math.round(st.hours)}h played`);
+      const t = taste(p.id);
+      const match = t && t.pct != null ? `<span class="match">${t.pct}% match</span>` : "";
       return `<button class="friend" data-act="open-friend" data-id="${p.id}">
         ${avatar(p.id)}
-        <div><div class="name">${esc(p.display_name)}${p.id === S.me ? ' <span class="subtle small">(you)</span>' : ""}</div>
+        <div><div class="name">${esc(p.display_name)}${p.id === S.me ? ' <span class="subtle small">(you)</span>' : ""}${match}</div>
           <div class="stats">${bits.join(", ")}</div></div>
         <div class="big"><strong>${st.fin}</strong><span>finished</span></div>
       </button>`;
@@ -488,6 +623,8 @@
     renderSheet();
   }
   function closeSheet() {
+    if (S.share && S.share.url) { try { URL.revokeObjectURL(S.share.url); } catch (_) {} }
+    S.share = null;
     S.sheet = null; S.draft = null;
     layer().innerHTML = "";
     document.body.style.overflow = "";
@@ -521,6 +658,7 @@
     else if (sh.kind === "edit") html = editSheet(sh.id);
     else if (sh.kind === "friend") html = friendSheet(sh.id);
     else if (sh.kind === "finish") html = finishSheet(sh.id);
+    else if (sh.kind === "share") html = shareSheet(sh.id);
     layer().innerHTML = html;
     document.body.style.overflow = "hidden";
     const first = $(".sheet [autofocus]");
@@ -569,6 +707,7 @@
         ${c.summary ? `<p class="summary" id="summary">${esc(c.summary)}</p><button type="button" class="btn ghost more" data-act="more">More</button>` : ""}
         <p class="credit">Game data from IGDB${c.igdb_url ? `. <a href="${esc(c.igdb_url)}" target="_blank" rel="noopener">View on IGDB</a>` : ""}</p>
       </div>` : ""}
+      ${!mine && pickReason(id) ? `<p class="why">Picked for you: ${esc(pickReason(id))}</p>` : ""}
       ${mine && mine.status !== "want" ? `<div id="sessions">${sessionsHTML(mine)}</div>` : ""}
 
       <form data-form="entry" data-id="${id}">
@@ -590,6 +729,7 @@
         </div>` : ""}
         <p class="error" role="alert"></p>
         <button class="btn block" type="submit">${mine ? "Save changes" : "Add to my shelf"}</button>
+        ${mine && (mine.rating != null || mine.review || mine.status === "finished") ? `<button type="button" class="btn secondary block share-btn" data-act="share-open" data-id="${id}">Share my review as an image</button>` : ""}
         ${mine ? `<button type="button" class="btn danger block" data-act="remove-entry" data-id="${mine.id}">Remove from my shelf</button>` : ""}
       </form>
 
@@ -764,11 +904,198 @@
     const bits = [`${st.fin} finished`, `${st.es.length} logged`];
     if (st.hours) bits.push(`${Math.round(st.hours)} hours`);
     if (st.avg != null) bits.push(`average rating ${fmtRating(Math.round(st.avg * 10) / 10)}`);
+    const t = taste(id);
+    let tasteHTML = "";
+    if (t) {
+      if (t.pct == null) {
+        tasteHTML = `<div class="panel taste"><p class="subtle" style="margin:0">Rate ${2 - t.n} more ${2 - t.n === 1 ? "game" : "games"} you've both played to see your taste match.</p></div>`;
+      } else {
+        const loved = t.pairs.filter((x) => x.me >= 4 && x.them >= 4).map((x) => idx.g[x.gameId]).filter(Boolean);
+        const split = t.pairs.slice().sort((a, b) => Math.abs(b.me - b.them) - Math.abs(a.me - a.them))[0];
+        const splitGame = split && Math.abs(split.me - split.them) >= 1.5 ? idx.g[split.gameId] : null;
+        tasteHTML = `<div class="panel taste">
+          <div class="taste-top"><strong>${t.pct}%</strong><span>taste match, from ${t.n} games you've both rated</span></div>
+          ${loved.length ? `<p><b>You both loved</b> ${loved.slice(0, 3).map((g) => esc(g.title)).join(", ")}</p>` : ""}
+          ${splitGame ? `<p><b>You disagree on</b> ${esc(splitGame.title)} (you ${fmtRating(split.me)}, ${esc(p.display_name)} ${fmtRating(split.them)})</p>` : ""}
+        </div>`;
+      }
+    }
     return sheetFrame("", `
       <div style="display:flex;gap:14px;align-items:center;margin:4px 0 6px">${avatar(id, "lg")}
         <div><h1 class="big-title" style="font-size:32px">${esc(p.display_name)}</h1>
         <div class="subtle small" style="margin-top:4px">${bits.join(", ")}</div></div></div>
+      ${tasteHTML}
       ${groups || `<p class="subtle">${id === S.me ? "You haven't" : esc(p.display_name) + " hasn't"} logged any games yet.</p>`}`, p.display_name);
+  }
+
+  // ---------------- S27: share card ----------------
+  function shareSheet(id) {
+    const g = idx.g[id];
+    const mine = myEntry(id);
+    if (!g || !mine || !S.share) return "";
+    const sh = S.share;
+    const canShare = !!(navigator.canShare && window.File);
+    return sheetFrame("Share your review", `
+      <div class="share-preview">${sh.url ? `<img src="${sh.url}" alt="Preview of your share image for ${esc(g.title)}">` : `<div class="share-wait" role="status">Making your image…</div>`}</div>
+      ${mine.review ? `<label class="check"><input type="checkbox" name="share-include" ${sh.include ? "checked" : ""}> <span>Include my review${mine.spoiler ? " (it's marked as a spoiler)" : ""}</span></label>` : ""}
+      <button class="btn block" data-act="share-go" ${sh.url ? "" : "disabled"}>${canShare ? "Share image" : "Save image"}</button>
+      <p class="subtle small" style="text-align:center">${canShare ? "Send it to your group chat, or save it to Photos from the share menu." : "Saves a PNG you can post anywhere."}</p>`);
+  }
+
+  let shareSeq = 0;
+  async function buildShare() {
+    const sh = S.share;
+    if (!sh) return;
+    const seq = ++shareSeq;
+    sh.busy = true;
+    try {
+      const blob = await drawShareCard(sh.gameId, sh.include);
+      if (seq !== shareSeq || S.share !== sh) return;
+      if (sh.url) URL.revokeObjectURL(sh.url);
+      sh.blob = blob; sh.url = URL.createObjectURL(blob); sh.busy = false;
+      if (S.sheet && S.sheet.kind === "share") renderSheet();
+    } catch (e) {
+      sh.busy = false;
+      toast("Couldn't make the image. Try again.");
+    }
+  }
+
+  function loadImage(src) {
+    return new Promise((resolve) => {
+      if (!src) return resolve(null);
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.referrerPolicy = "no-referrer";
+      const done = (ok) => resolve(ok ? img : null);
+      img.onload = () => done(true);
+      img.onerror = () => done(false);
+      setTimeout(() => done(false), 4000);
+      img.src = src;
+    });
+  }
+
+  function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  function wrapLines(ctx, text, maxW, maxLines) {
+    const words = String(text).split(/\s+/).filter(Boolean);
+    const lines = []; let line = "";
+    for (let i = 0; i < words.length; i++) {
+      const test = line ? line + " " + words[i] : words[i];
+      if (ctx.measureText(test).width <= maxW || !line) line = test;
+      else { lines.push(line); line = words[i]; if (lines.length === maxLines) break; }
+    }
+    if (lines.length < maxLines && line) lines.push(line);
+    const usedAll = lines.join(" ").split(/\s+/).length >= words.length;
+    if (!usedAll && lines.length) {
+      let last = lines[lines.length - 1];
+      while (last && ctx.measureText(last + "…").width > maxW) last = last.slice(0, -1);
+      lines[lines.length - 1] = last.replace(/[\s,.;:]+$/, "") + "…";
+    }
+    return lines;
+  }
+  function starShape(ctx, cx, cy, r) {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = -Math.PI / 2 + i * Math.PI / 5, rad = i % 2 ? r * 0.46 : r;
+      ctx.lineTo(cx + rad * Math.cos(a), cy + rad * Math.sin(a));
+    }
+    ctx.closePath();
+  }
+
+  async function drawShareCard(gameId, includeReview) {
+    const g = idx.g[gameId], e = myEntry(gameId), me = idx.p[S.me];
+    const W = 1080, H = 1350;
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const ctx = cv.getContext("2d");
+    const font = (w, px) => `${w} ${px}px Archivo, system-ui, -apple-system, sans-serif`;
+    try { await Promise.all([document.fonts.load(font(850, 72)), document.fonts.load(font(600, 36))]); } catch (_) {}
+    const setStretch = (v) => { try { ctx.fontStretch = v; } catch (_) {} };
+    const col = cartColors(g);
+
+    // Background
+    ctx.fillStyle = "#1C1F33"; ctx.fillRect(0, 0, W, H);
+
+    // Cartridge
+    const cw = 500, ch = 560, cx = (W - cw) / 2, cy = 96;
+    ctx.fillStyle = col.d; rr(ctx, cx, cy + 18, cw, ch, 44); ctx.fill();
+    ctx.fillStyle = col.c; rr(ctx, cx, cy, cw, ch, 44); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.2)";
+    for (let i = 0; i < 12; i++) ctx.fillRect(cx + 120 + i * 23, cy + 22, 6, 40);
+    const lx = cx + 46, ly = cy + 92, lw = cw - 92, lh = ch - 184;
+    ctx.save(); rr(ctx, lx, ly, lw, lh, 16); ctx.clip();
+    ctx.fillStyle = "#F7F5EE"; ctx.fillRect(lx, ly, lw, lh);
+    const art = await loadImage(coverUrl(g, "t_cover_big"));
+    let drewArt = false;
+    if (art) {
+      try {
+        const s = Math.max(lw / art.width, lh / art.height);
+        const iw = art.width * s, ih = art.height * s;
+        ctx.drawImage(art, lx + (lw - iw) / 2, ly + (lh - ih) / 2, iw, ih);
+        drewArt = true;
+      } catch (_) { drewArt = false; }
+    }
+    if (!drewArt) {
+      ctx.fillStyle = col.band; ctx.fillRect(lx, ly, lw, lh * 0.22);
+      ctx.fillStyle = "#1C1F33"; ctx.font = font(850, 54); setStretch("extra-condensed");
+      const tl = wrapLines(ctx, g.title, lw - 56, 4);
+      tl.forEach((t, i) => ctx.fillText(t, lx + 28, ly + lh - 34 - (tl.length - 1 - i) * 52));
+      setStretch("normal");
+    }
+    ctx.restore();
+
+    // Paper panel
+    const px = 60, py = 720, pw = W - 120, ph = H - py - 60;
+    ctx.fillStyle = "#F7F5EE"; rr(ctx, px, py, pw, ph, 36); ctx.fill();
+    let y = py + 84;
+    const verb = { want: "wants to play", playing: "is playing", paused: "paused", finished: "finished", dropped: "dropped" }[e.status];
+    ctx.fillStyle = "#565C78"; ctx.font = font(650, 34); setStretch("normal");
+    ctx.fillText(`${me ? me.display_name : "I"} ${verb}`, px + 50, y);
+    y += 22;
+    ctx.fillStyle = "#1C1F33"; ctx.font = font(850, 76); setStretch("extra-condensed");
+    const tl = wrapLines(ctx, g.title, pw - 100, 2);
+    tl.forEach((t) => { y += 74; ctx.fillText(t, px + 50, y); });
+    setStretch("normal");
+    if (e.rating != null) {
+      y += 34;
+      for (let i = 0; i < 5; i++) {
+        const sx = px + 50 + 30 + i * 70, sy = y + 30;
+        ctx.fillStyle = "#CCD1DD"; starShape(ctx, sx, sy, 30); ctx.fill();
+        const fill = e.rating >= i + 1 ? 1 : e.rating >= i + 0.5 ? 0.5 : 0;
+        if (fill) { ctx.save(); ctx.beginPath(); ctx.rect(sx - 31, sy - 31, 62 * fill, 62); ctx.clip(); ctx.fillStyle = "#F0A800"; starShape(ctx, sx, sy, 30); ctx.fill(); ctx.restore(); }
+      }
+      y += 66;
+    }
+    const metaParts = [e.hours ? fmtHours(e.hours) + " played" : "", e.status === "finished" ? took(e) : ""].filter(Boolean);
+    const bottomLimit = py + ph - (metaParts.length ? 120 : 80);
+    if (e.review) {
+      ctx.font = font(500, 38);
+      if (includeReview) {
+        ctx.fillStyle = "#1C1F33";
+        const room = Math.max(1, Math.min(5, Math.floor((bottomLimit - y - 20) / 50)));
+        const ql = wrapLines(ctx, "“" + e.review.replace(/\s+/g, " ").trim() + "”", pw - 100, room);
+        ql.forEach((q) => { y += 52; ctx.fillText(q, px + 50, y); });
+      } else if (e.spoiler) {
+        ctx.fillStyle = "#8A8FA8"; y += 52; ctx.fillText("Review hidden: it has spoilers", px + 50, y);
+      }
+    }
+    // Footer
+    const fy = py + ph - 50;
+    if (metaParts.length) { ctx.fillStyle = "#565C78"; ctx.font = font(600, 30); ctx.fillText(metaParts.join(", ").replace(/^./, (c) => c.toUpperCase()), px + 50, fy); }
+    ctx.font = font(850, 34); setStretch("condensed"); ctx.fillStyle = "#1C1F33";
+    const brand = "Save Point"; const bw = ctx.measureText(brand).width;
+    ctx.fillText(brand, px + pw - 50 - bw, fy);
+    setStretch("normal");
+    const ix = px + pw - 50 - bw - 46, iy = fy - 32;
+    ctx.fillStyle = "#2238A0"; rr(ctx, ix, iy + 4, 32, 36, 6); ctx.fill();
+    ctx.fillStyle = "#3456D1"; rr(ctx, ix, iy, 32, 36, 6); ctx.fill();
+    ctx.fillStyle = "#F7F5EE"; ctx.fillRect(ix + 6, iy + 9, 20, 18);
+    ctx.fillStyle = "#E5483B"; ctx.fillRect(ix + 6, iy + 9, 20, 5);
+    if (drewArt) { ctx.fillStyle = "rgba(255,255,255,0.5)"; ctx.font = font(500, 20); ctx.fillText("Cover art via IGDB", 60, H - 22); }
+
+    return await new Promise((resolve, reject) => cv.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"));
   }
 
   // ---------------- Dialog & toast ----------------
@@ -904,6 +1231,39 @@
     },
     more(el) { const p = $("#summary"); if (p) { p.classList.toggle("open"); el.textContent = p.classList.contains("open") ? "Less" : "More"; } },
     "update-refresh"() { applyUpdate(); },
+    "pick-external"(el) {
+      const id = Number(el.dataset.igdb);
+      const row = S.similar && S.similar.games.find((r) => r.igdb_id === id);
+      if (!row) return;
+      S.cat = { q: row.name, results: [row], loading: false, error: null, picked: row, platform: null };
+      openSheet({ kind: "add", mode: "search", status: "want" });
+    },
+    "share-open"(el) {
+      const id = el.dataset.id;
+      const mine = myEntry(id);
+      S.share = { gameId: id, include: !!(mine && mine.review && !mine.spoiler), url: null, blob: null, busy: true };
+      openSheet({ kind: "share", id });
+      buildShare();
+    },
+    async "share-go"() {
+      const sh = S.share;
+      if (!sh || !sh.blob) return;
+      const g = idx.g[sh.gameId];
+      const name = `save-point-${norm(g ? g.title : "review") || "review"}.png`;
+      const file = new File([sh.blob], name, { type: "image/png" });
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: g ? g.title : "Save Point" });
+          return;
+        }
+      } catch (e) {
+        if (e && e.name === "AbortError") return;
+      }
+      const a = document.createElement("a");
+      a.href = sh.url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      toast("Image saved");
+    },
     "edit-game"(el) { openSheet({ kind: "edit", id: el.dataset.id }); },
     close() { closeSheet(); },
     backdrop(el, ev) { if (ev.target === el) closeSheet(); },
@@ -1233,6 +1593,7 @@
   });
   document.addEventListener("change", (ev) => {
     if (ev.target.name === "sort") { S.sort = ev.target.value; lsSet("sp-sort", S.sort); renderMain(); }
+    if (ev.target.name === "share-include" && S.share) { S.share.include = ev.target.checked; buildShare(); }
   });
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && S.sheet && !$(".dialog")) closeSheet();

@@ -140,6 +140,7 @@
     }
     async catalogSearch(q) { return (await this.catalog({ action: "search", q })).results || []; }
     async catalogGet(igdbId) { return (await this.catalog({ action: "get", igdb_id: igdbId })).game; }
+    async catalogSimilar(ids) { return (await this.catalog({ action: "similar", ids })).games || []; }
     subscribe(onChange) {
       this.unsubscribe();
       try {
@@ -156,7 +157,7 @@
   }
 
   // ---------------- Demo ----------------
-  const DEMO_KEY = "savepoint-demo-v2";
+  const DEMO_KEY = "savepoint-demo-v3";
   const ME = "demo-me";
 
   function uid() {
@@ -178,7 +179,7 @@
       ["Outer Wilds", "PC", 2019], ["Stardew Valley", "Switch", 2016], ["Astro Bot", "PS5", 2024],
       ["Hollow Knight: Silksong", "Switch", 2025], ["Disco Elysium", "PC", 2019], ["Tetris Effect", "Quest", 2018],
     ].map(([title, platform, year], i) => ({
-      id: "g" + i, title, platform, year, cover_url: null,
+      id: "g" + i, title, platform, year, cover_url: null, igdb_id: { 0: 9001, 2: 9004 }[i] || null,
       added_by: P[i % 4].id, created_at: daysAgo(40 - i),
     }));
     const E = [];
@@ -205,7 +206,13 @@
     add(9, "demo-jon", "playing", null, 18, "", 0, 1);
     add(10, "demo-maya", "want", null, null, "", 10, 0);
     add(11, "demo-priya", "finished", 4, 10, "Zone mode in VR is something else.", 12, 0);
-    return { profiles: P, games: G, entries: E };
+    add(1, ME, "finished", 4, 20, "Dangerously moreish.", 11, 0);
+    add(11, ME, "dropped", 3, 4, "", 14, 0);
+    const C = [9001, 9004].map((id) => {
+      const g = DEMO_CATALOG.find((x) => x.igdb_id === id);
+      return { igdb_id: g.igdb_id, name: g.name, cover_image_id: null, first_release_date: g.year + "-06-01", platforms: g.platforms, genres: g.genres, summary: g.summary, critic_score: g.critic_score, critic_count: g.critic_count, igdb_url: null, steam_appid: null, similar_ids: DEMO_SIMILAR[id] || [] };
+    });
+    return { profiles: P, games: G, entries: E, catalog: C };
   }
 
   const DEMO_CATALOG = [
@@ -216,7 +223,11 @@
     { igdb_id: 9005, name: "Zelda: Tears of the Kingdom", year: 2023, platforms: ["Switch"], genres: ["Adventure"], summary: "An epic adventure across the land and skies of Hyrule.", critic_score: 96, critic_count: 100 },
     { igdb_id: 9006, name: "Halo Infinite", year: 2021, platforms: ["PC", "XSX"], genres: ["Shooter"], summary: "Master Chief returns.", critic_score: 84, critic_count: 70 },
     { igdb_id: 9007, name: "Stardew Valley", year: 2016, platforms: ["PC", "Switch", "PS4", "iOS"], genres: ["Simulator", "RPG"], summary: "You've inherited your grandfather's old farm plot.", critic_score: 89, critic_count: 40 },
+    { igdb_id: 9008, name: "Dark Souls III", year: 2016, platforms: ["PC", "PS4", "XONE"], genres: ["RPG"], summary: "As fires fade and the world falls into ruin.", critic_score: 89, critic_count: 80 },
+    { igdb_id: 9009, name: "Sekiro: Shadows Die Twice", year: 2019, platforms: ["PC", "PS4", "XONE"], genres: ["Adventure"], summary: "Carve your own clever path to vengeance.", critic_score: 90, critic_count: 90 },
+    { igdb_id: 9010, name: "Dead Cells", year: 2018, platforms: ["PC", "Switch", "PS4"], genres: ["Roguelike", "Platform"], summary: "Explore a sprawling, ever-changing castle.", critic_score: 89, critic_count: 50 },
   ];
+  const DEMO_SIMILAR = { 9001: [9010, 9002], 9004: [9008, 9009, 9002] };
 
   class DemoApi {
     constructor() {
@@ -246,10 +257,15 @@
       return DEMO_CATALOG.filter((g) => g.name.toLowerCase().replace(/[^a-z0-9]+/g, "").includes(n))
         .map((g) => ({ igdb_id: g.igdb_id, name: g.name, year: g.year, cover_image_id: null, platforms: g.platforms }));
     }
+    async catalogSimilar(ids) {
+      await new Promise((r) => setTimeout(r, 150));
+      return DEMO_CATALOG.filter((g) => ids.includes(g.igdb_id))
+        .map((g) => ({ igdb_id: g.igdb_id, name: g.name, year: g.year, cover_image_id: null, platforms: g.platforms, critic_score: g.critic_score, critic_count: g.critic_count }));
+    }
     async catalogGet(igdbId) {
       const g = DEMO_CATALOG.find((x) => x.igdb_id === igdbId);
       if (!g) throw new Error("That game isn't in the games database any more.");
-      const row = { igdb_id: g.igdb_id, name: g.name, cover_image_id: null, first_release_date: g.year + "-06-01", platforms: g.platforms, genres: g.genres, summary: g.summary, critic_score: g.critic_score, critic_count: g.critic_count, igdb_url: null, steam_appid: null, similar_ids: [] };
+      const row = { igdb_id: g.igdb_id, name: g.name, cover_image_id: null, first_release_date: g.year + "-06-01", platforms: g.platforms, genres: g.genres, summary: g.summary, critic_score: g.critic_score, critic_count: g.critic_count, igdb_url: null, steam_appid: null, similar_ids: DEMO_SIMILAR[g.igdb_id] || [] };
       this.db.catalog = (this.db.catalog || []).filter((x) => x.igdb_id !== igdbId).concat(row);
       this.save();
       return row;

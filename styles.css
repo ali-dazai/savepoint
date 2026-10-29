@@ -490,3 +490,21 @@ textarea.input { min-height: 110px; resize: vertical; line-height: 1.45; }
 .sheet { will-change: transform; }
 
 .sheet.tall { min-height: min(78dvh, 640px); }
+
+/* ================= Release 2 additions ================= */
+.picks .np { width: 124px; }
+.picks .np .cart { width: 124px; }
+.pick-title { font-weight: 700; font-size: 14px; line-height: 1.2; margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pick-why { font-size: 12.5px; color: var(--ink-2); margin-top: 2px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.nudge { margin: -4px 0 24px; padding: 12px 14px; border-radius: 14px; background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--line); color: var(--ink-2); font-size: 14.5px; }
+.why { margin: -8px 0 20px; padding: 10px 12px; border-radius: 12px; background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--line); font-size: 14.5px; color: var(--ink-2); }
+.match { display: inline-block; margin-left: 8px; font-size: 12px; font-weight: 750; color: var(--accent); border: 1.5px solid currentColor; border-radius: 999px; padding: 0 8px; vertical-align: 2px; }
+.taste { margin: 14px 0 6px; }
+.taste-top { display: flex; align-items: baseline; gap: 10px; }
+.taste-top strong { font-size: 40px; line-height: 1; font-weight: 850; font-stretch: 70%; font-variation-settings: "wdth" 70; color: var(--accent); }
+.taste-top span { color: var(--ink-2); font-size: 14px; }
+.taste p { margin: 10px 0 0; font-size: 15px; }
+.share-btn { margin-top: 10px; }
+.share-preview { display: grid; place-items: center; margin: 4px 0 16px; }
+.share-preview img { width: min(100%, 360px); aspect-ratio: 4 / 5; border-radius: 16px; box-shadow: var(--shadow); background: #1C1F33; }
+.share-wait { width: min(100%, 360px); aspect-ratio: 4 / 5; border-radius: 16px; background: var(--surface); display: grid; place-items: center; color: var(--ink-2); box-shadow: inset 0 0 0 1.5px var(--line); }
