@@ -61,7 +61,7 @@ const out = path.join(__dirname, '..', '..', 'test-results', 'picks-share'); fs.
   await page.click('[data-tab=shelf]');
   await page.click('[data-act=scope][data-scope=mine]');
   await page.fill('input[name=q]', 'elden');
-  await page.click('.tile');
+  await page.click('.case-btn');
   await page.click('.g-nav [data-act=share-open]');
   await page.waitForSelector('.share-preview img', { timeout: 15000 });
   const dims = await page.locator('.share-preview img').evaluate(i => new Promise(r => i.complete ? r([i.naturalWidth, i.naturalHeight]) : (i.onload = () => r([i.naturalWidth, i.naturalHeight]))));

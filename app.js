@@ -220,6 +220,63 @@
   function gameTint(g) { const c = catOf(g); return tintFrom(c && c.cover_color, g.igdb_id || g.id || g.title); }
   function rowTint(r) { const c = catRow(r.igdb_id); return tintFrom((c && c.cover_color) || r.cover_color, r.igdb_id || r.name); }
 
+  // ---------------- Case Wall: the wall takes a deep shade of the game you're playing ----------------
+  const WALL_DEFAULT = [352, 0.38];
+  function hueSat(color, key) {
+    const p = hexToHsl(color);
+    if (p) return [p[0], p[1] < 0.1 ? 0.06 : Math.min(0.5, Math.max(0.22, p[1] * 0.75))];
+    return [hash(String(key)) % 360, 0.25];
+  }
+  function gameHueSat(g) { const c = catOf(g); return hueSat(c && c.cover_color, g.igdb_id || g.id || g.title); }
+  function wallVars(h, s) {
+    return {
+      "--bg": hsl(h, s, 0.13), "--wall-2": hsl(h, s, 0.085), "--lip": hsl(h, s * 0.9, 0.22),
+      "--s1": hsl(h, s, 0.1), "--s2": hsl(h, s * 0.85, 0.19), "--s3": hsl(h, s * 0.85, 0.25), "--sheet": hsl(h, s, 0.11),
+      "--ink": hsl(h, 0.5, 0.94), "--body": hsl(h, 0.32, 0.87), "--ink-2": hsl(h, 0.26, 0.79), "--ink-3": hsl(h, 0.16, 0.64),
+      "--on-ink": hsl(h, s, 0.12), "--sticker": hsl(h, 0.5, 0.94), "--sticker-ink": hsl(h, s, 0.12),
+    };
+  }
+  // The game page's manual: light paper, faintly tinted by the game.
+  function manualVars(h, s) {
+    const ps = Math.min(0.3, s);
+    return {
+      "--bg": hsl(h, ps, 0.955), "--s1": hsl(h, ps, 0.915), "--s2": hsl(h, ps * 0.8, 0.89), "--s3": hsl(h, ps * 0.8, 0.83),
+      "--sheet": hsl(h, ps, 0.955), "--line": "rgba(50, 25, 25, 0.12)", "--line-2": "rgba(50, 25, 25, 0.24)",
+      "--ink": hsl(h, 0.45, 0.13), "--body": hsl(h, 0.22, 0.22), "--ink-2": hsl(h, 0.14, 0.32), "--ink-3": hsl(h, 0.1, 0.41),
+      "--on-ink": hsl(h, ps, 0.965), "--star": "#D2930F", "--danger": "#B3302A",
+    };
+  }
+  const styleVars = (v) => Object.entries(v).map(([k, val]) => `${k}:${val}`).join(";");
+  let wallKey = "";
+  function applyWall() {
+    const mine = S.entries.filter((e) => e.user_id === S.me && idx.g[e.game_id]).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    const pick = mine.find((e) => e.status === "playing") || mine[0];
+    const hs = pick ? gameHueSat(idx.g[pick.game_id]) : WALL_DEFAULT;
+    const key = hs.map((x) => x.toFixed(2)).join(",");
+    if (key === wallKey) return;
+    wallKey = key;
+    const v = wallVars(hs[0], hs[1]);
+    const r = document.documentElement.style;
+    Object.entries(v).forEach(([k, val]) => r.setProperty(k, val));
+    const meta = $('meta[name="theme-color"]'); if (meta) meta.content = v["--bg"];
+  }
+
+  // Stickers sit in one spot on the case and say the status at a glance.
+  function stickerFor(g, e) {
+    if (!e) return "";
+    if (e.status === "finished") return `<span class="stk done">Completed</span>`;
+    if (e.status === "dropped") return `<span class="stk traded">Traded in</span>`;
+    if (e.status === "paused") return `<span class="stk paused">Paused</span>`;
+    if (e.status === "want") { const rel = releaseInfo(catOf(g)); if (rel && rel.upcoming) return `<span class="stk">Out ${esc(rel.short)}</span>`; }
+    return "";
+  }
+  const SCUFFS = [
+    "left:3cqw;top:1.5cqw;width:11cqw;transform:rotate(-38deg)", "right:1.5cqw;bottom:7cqw;width:9cqw;transform:rotate(32deg)",
+    "right:0.4cqw;top:24cqw;width:6cqw;transform:rotate(82deg)", "left:1cqw;bottom:1.5cqw;width:9cqw;transform:rotate(44deg)",
+    "right:22cqw;bottom:0.6cqw;width:8cqw", "left:0.4cqw;top:44cqw;width:6cqw;transform:rotate(90deg)",
+  ];
+  function wearOf(hours) { return hours >= 200 ? 3 : hours >= 100 ? 2 : hours >= 50 ? 1 : 0; }
+
   // ---------------- Building blocks ----------------
   function starSvg(cls) { return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${STAR_PATH}" fill="currentColor"/></svg>`; }
   function star(fill) {
@@ -236,19 +293,19 @@
     const letter = p ? (p.display_name.trim()[0] || "?").toUpperCase() : "?";
     return `<span class="avatar ${cls}" style="--c:${col}" aria-hidden="true">${esc(letter)}</span>`;
   }
-  // Cover tile: the box art when we have it, otherwise a tinted tile with the title.
-  function coverHTML({ title, url, tint, cls = "", badge = "" }) {
-    if (badge) cls += " has-badge";
-    return `<span class="cv ${cls}" style="--t:${tint.tile};--tm:${tint.soft}" aria-hidden="true">${url
-      ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span class="cv-t">${esc(title)}</span>${badge ? `<span class="badge">${esc(badge)}</span>` : ""}</span>`;
+  // A game case: the box art as its cover insert when we have it, otherwise a tinted insert with the title.
+  function coverHTML({ title, url, tint, cls = "", sticker = "", sealed = false, wear = 0 }) {
+    const scuffs = SCUFFS.slice(0, wear * 2).map((st) => `<i class="scuff" style="${st}"></i>`).join("");
+    return `<span class="cv ${cls}" style="--t:${tint.tile};--tm:${tint.soft}" aria-hidden="true"><span class="art">${url
+      ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span class="cv-t">${esc(title)}</span></span>${sealed ? `<span class="wrap"></span>` : ""}${scuffs}${sticker}</span>`;
   }
   function gameCover(g, opts = {}) {
-    return coverHTML({ title: g.title, url: coverUrl(g, opts.size || "cover_big"), tint: gameTint(g), cls: opts.cls, badge: opts.badge });
+    return coverHTML({ title: g.title, url: coverUrl(g, opts.size || "cover_big"), tint: gameTint(g), cls: opts.cls, sticker: opts.sticker, sealed: opts.sealed, wear: opts.wear });
   }
   function rowCover(r, opts = {}) {
     const c = catRow(r.igdb_id);
     const img = r.cover_image_id || (c && c.cover_image_id);
-    return coverHTML({ title: r.name, url: img ? IGDB_IMG(img, opts.size || "cover_big") : "", tint: rowTint(r), cls: opts.cls });
+    return coverHTML({ title: r.name, url: img ? IGDB_IMG(img, opts.size || "cover_big") : "", tint: rowTint(r), cls: opts.cls, sealed: opts.sealed, sticker: opts.sticker });
   }
   function markHTML() { return `<div class="mark" aria-hidden="true"><i></i><i></i><i>${ICON.star}</i></div>`; }
   function spoilerText(e, cls) {
@@ -561,6 +618,7 @@
   ];
   function renderMain() {
     const keepScroll = window.scrollY;
+    applyWall();
     const body = S.tab === "shelf" ? shelfView() : S.tab === "friends" ? friendsView() : S.tab === "discover" ? discoverView() : feedView();
     root().innerHTML = `
       <div class="ptr" id="ptr" aria-hidden="true"><span>Pull to refresh</span></div>
@@ -596,26 +654,35 @@
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
       .slice(0, 80);
 
+    // Top: your current case, big, with +1 hour. If you're not playing anything, the most recent friend's.
     let top = "";
-    if (playing.length) {
-      const h = playing[0], g = idx.g[h.game_id], t = gameTint(g);
-      const bits = [];
-      if (h.hours) bits.push(`${fmtHours(h.hours)} so far`);
-      if (h.started_at) bits.push(`started ${since(h.started_at)}`);
-      const who = h.user_id === S.me ? "You're playing" : `${nameOf(h.user_id)} is playing`;
-      top = `<button class="hero" style="--hb:${t.bg};--hm:${t.soft}" data-act="open-game" data-id="${g.id}" aria-label="${esc(who)} ${esc(g.title)}">
-          ${gameCover(g)}
-          <span class="hero-text"><span><span class="hero-who">${avatar(h.user_id, "sm")}${esc(who)}</span><b class="hero-title">${esc(g.title)}</b></span>
-          <span class="hero-meta">${esc(bits.join(", ") || "Just started")}</span></span>
-        </button>`;
-      const rest = playing.slice(1, 5);
-      if (rest.length) {
-        top += `<div class="also">${rest.map((e) => {
+    const h = playing.find((e) => e.user_id === S.me) || playing[0];
+    if (h) {
+      const g = idx.g[h.game_id];
+      const mineTop = h.user_id === S.me;
+      const who = mineTop ? "You're playing" : `${nameOf(h.user_id)} is playing`;
+      const sub = [h.started_at ? `started ${since(h.started_at)}` : "", mineTop && h.updated_at ? `last played ${ago(h.updated_at)}` : ""].filter(Boolean).join(", ");
+      top = `<section class="now">
+        <button class="now-case case-btn" data-act="open-game" data-id="${g.id}"${mineTop ? ' data-hold="1"' : ""} aria-label="${esc(who)} ${esc(g.title)}">${gameCover(g, { wear: wearOf(h.hours || 0) })}</button>
+        <div class="now-text">
+          <div class="now-who">${mineTop ? "" : avatar(h.user_id, "sm")}${esc(who)}</div>
+          <button class="now-title link-btn" data-act="open-game" data-id="${g.id}">${esc(g.title)}</button>
+          <div class="now-hours">${h.hours ? fmtHours(h.hours) : "0h"}</div>
+          ${sub ? `<div class="now-sub">${esc(sub)}</div>` : ""}
+          ${mineTop ? `<button class="btn now-add" data-act="quick-hours" data-id="${g.id}" data-delta="1">+1 hour</button>` : ""}
+        </div>
+      </section>`;
+    }
+    // Everyone else's current games, standing on a shelf.
+    const rest = playing.filter((e) => e !== h).slice(0, 8);
+    if (rest.length) {
+      top += `<section class="section"><h2 class="section-title">On everyone's shelf now</h2>
+        <div class="mini-shelf"><div class="mini-cases">${rest.map((e) => {
           const g2 = idx.g[e.game_id];
-          return `<button data-act="open-game" data-id="${g2.id}" aria-label="${esc(nameOf(e.user_id))}: ${esc(g2.title)}">${gameCover(g2, { cls: "sm" })}
-            <span class="also-text"><b>${esc(nameOf(e.user_id))}</b><span>${esc(g2.title)}</span></span></button>`;
-        }).join("")}</div>`;
-      }
+          return `<button class="mini" data-act="open-game" data-id="${g2.id}" aria-label="${esc(nameOf(e.user_id))} is playing ${esc(g2.title)}">
+            <span class="mini-case">${gameCover(g2, { cls: "sm" })}${avatar(e.user_id, "sm mini-av")}</span>
+            <span class="mini-name">${esc(e.user_id === S.me ? "You" : nameOf(e.user_id))}</span></button>`;
+        }).join("")}</div><div class="ledge thin"></div></div></section>`;
     }
 
     const isNew = (e) => S.seenAt && e.user_id !== S.me && e.updated_at > S.seenAt;
@@ -646,14 +713,14 @@
   function pickCard(p) {
     if (p.kind === "friend") {
       return `<button class="rail-item" data-act="open-game" data-id="${p.game.id}" aria-label="${esc(p.game.title)}: ${esc(p.reason)}">
-        ${gameCover(p.game)}
+        ${gameCover(p.game, { sealed: true })}
         <div class="rail-title">${esc(p.game.title)}</div>
         <div class="rail-why">${esc(p.reason)}</div>
       </button>`;
     }
     const r = p.row;
     return `<button class="rail-item" data-act="open-row" data-igdb="${r.igdb_id}" data-why="${esc(p.reason)}" aria-label="${esc(r.name)}: ${esc(p.reason)}">
-      ${rowCover(r)}
+      ${rowCover(r, { sealed: true })}
       <div class="rail-title">${esc(r.name)}</div>
       <div class="rail-why">${esc(p.reason)}</div>
     </button>`;
@@ -663,7 +730,7 @@
     const g = idx.g[e.game_id];
     const t = e.status === "finished" ? took(e) : "";
     return `<li class="feed-item${fresh ? " is-new" : ""}">
-      <button class="thumb" data-act="open-game" data-id="${g.id}" aria-label="Open ${esc(g.title)}">${gameCover(g, { cls: "sm" })}</button>
+      <button class="thumb" data-act="open-game" data-id="${g.id}" aria-label="Open ${esc(g.title)}">${gameCover(g, { cls: "sm", sealed: e.status === "want", sticker: e.status === "finished" ? `<span class="stk done">Completed</span>` : "" })}</button>
       <div>
         <div class="what"><b>${esc(nameOf(e.user_id))}</b> ${verbFor(e)} <button class="link-btn" data-act="open-game" data-id="${g.id}">${esc(g.title)}</button></div>
         <div class="when">${e.rating != null ? stars(e.rating, 12) + " " : ""}${ago(e.updated_at)}${e.hours ? ", " + fmtHours(e.hours) + " played" : ""}${t ? ", " + t : ""}</div>
@@ -706,7 +773,16 @@
     else if (!games.length && q) grid = `<div class="empty"><h3>No games match "${esc(S.search)}"</h3><p>Check the spelling, or add it to the shelf.</p><button class="btn" data-act="add-game" data-title="${esc(S.search)}">Add ${esc(S.search)}</button></div>`;
     else if (!games.length && mine && S.status !== "all") grid = `<div class="empty"><h3>Nothing marked ${esc(STATUS_LABEL[S.status].toLowerCase())}</h3><p>Open a game and set its status to see it here.</p></div>`;
     else if (!games.length && mine) grid = emptyState("Your shelf is empty", "Log a game from Everyone's shelf, or add a new one.", "Add a game");
-    else grid = `<div class="grid">${games.map((g) => shelfTile(g, mine)).join("")}</div>`;
+    else {
+      const cols = window.innerWidth >= 560 ? 4 : 3;
+      let rows = "";
+      for (let i = 0; i < games.length; i += cols) {
+        const row = games.slice(i, i + cols);
+        rows += `<div class="shelf-row"><div class="cases">${row.map((g) => caseTile(g)).join("")}</div>
+          <div class="ledge"><div class="labels">${row.map((g) => caseLabel(g, mine)).join("")}</div></div></div>`;
+      }
+      grid = `<div class="wall" style="--cols:${cols}">${rows}</div>`;
+    }
     return `<div class="toolbar"><span class="subtle small">${games.length} ${games.length === 1 ? "game" : "games"}</span>
         <label><span class="sr-only">Sort by</span><select class="sort" name="sort">
           <option value="recent" ${S.sort === "recent" ? "selected" : ""}>Recently active</option>
@@ -723,7 +799,9 @@
           ${[{ id: "all", label: "All" }, ...STATUSES].map((s) => `<button class="chip" data-act="status-filter" data-status="${s.id}" aria-pressed="${S.status === s.id}">${s.label}<b>${counts[s.id] || 0}</b></button>`).join("")}
         </div>`
       : "";
+    const canHold = mine && S.entries.some((e) => e.user_id === S.me && e.status === "playing");
     return topbar("Shelf") + `
+      ${canHold ? `<p class="hint">Hold a case to add an hour.</p>` : ""}
       <div class="seg" role="group" aria-label="Whose games">
         <button data-act="scope" data-scope="mine" aria-pressed="${mine}">My games</button>
         <button data-act="scope" data-scope="all" aria-pressed="${!mine}">Everyone's</button>
@@ -733,20 +811,28 @@
       <div id="shelf-results">${shelfResults()}</div>`;
   }
 
-  function shelfTile(g, mine) {
+  // A case on the wall. Playing games stand forward; hold any logged case (not sealed) to add an hour.
+  function caseTile(g) {
     const me = myEntry(g.id);
-    const sc = groupScore(g.id);
-    const badge = me && !(mine && S.status !== "all") ? STATUS_LABEL[me.status] : "";
-    const meta = sc
-      ? `${stars(sc.avg, 11)}<span>${fmtRating(round1(sc.avg))}</span>`
-      : `<span>${(idx.byGame[g.id] || []).length ? "No ratings yet" : "Nobody's logged it"}</span>`;
-    const quick = mine && me && me.status === "playing"
-      ? `<button type="button" class="quick" data-act="quick-hours" data-id="${g.id}" data-delta="1" aria-label="Add 1 hour to ${esc(g.title)}">+1h</button>` : "";
-    return `<div class="tile-wrap"><button class="tile" data-act="open-game" data-id="${g.id}">
-      ${gameCover(g, { badge })}
-      <div class="tile-title">${esc(g.title)}</div>
-      <div class="tile-meta">${meta}</div>
-    </button>${quick}</div>`;
+    const out = me && me.status === "playing";
+    const canHold = me && me.status !== "want";
+    const label = [g.title, me && STATUS_LABEL[me.status], me && me.hours ? fmtHours(me.hours) : ""].filter(Boolean).join(", ");
+    return `<button class="case-btn${out ? " out" : ""}" data-act="open-game" data-id="${g.id}"${canHold ? ' data-hold="1"' : ""} aria-label="${esc(label)}">
+      ${gameCover(g, { sticker: stickerFor(g, me), sealed: !!me && me.status === "want", wear: me ? wearOf(me.hours || 0) : 0 })}</button>`;
+  }
+  // The shelf-edge label under each case: title, then hours and rating (mine) or the group's score (everyone's).
+  function caseLabel(g, mine) {
+    const me = myEntry(g.id);
+    let line;
+    if (mine && me) {
+      if (me.status === "want") { const rel = releaseInfo(catOf(g)); line = `<b>Sealed</b>${rel && rel.upcoming ? esc(rel.short) : ""}`; }
+      else line = `<b>${me.hours ? fmtHours(me.hours) : "0h"}</b>${me.rating != null ? fmtRating(me.rating) + " stars" : esc(STATUS_LABEL[me.status])}`;
+    } else {
+      const sc = groupScore(g.id);
+      const n = (idx.byGame[g.id] || []).length;
+      line = sc ? `<b>${fmtRating(round1(sc.avg))}</b>${sc.n} rated` : `${n} logged`;
+    }
+    return `<div class="lbl"><span class="t">${esc(g.title)}</span>${line}</div>`;
   }
 
   // ---------------- Discover (S33 trending, S34 calendar) ----------------
@@ -778,18 +864,18 @@
   }
   function trendingHTML(d) {
     const items = d.trending || [];
-    const note = "From Steam's live most-played chart: new arrivals and fast climbers first, then this year's big games.";
+    const note = "Steam's most played right now: new arrivals and fast climbers first. Tap + to put a sealed copy on your shelf.";
     if (!items.length) return `<p class="nudge">Nothing to show yet. Check back later.</p>`;
     return `<p class="disc-note">${note}</p><ol class="trend">${items.map((r, i) => {
       const shelf = idx.byIgdb[r.igdb_id];
       const line = shelf ? groupLine(shelf.id) : "";
       const meta = r.peak
-        ? [`${fmtNum(r.peak)} peak players`, r.steam_pct != null ? `${r.steam_pct}% positive` : ""].filter(Boolean).join(" · ")
-        : [r.year, (r.platforms || []).slice(0, 3).join(", ")].filter(Boolean).join(" · ");
+        ? [`${fmtNum(r.peak)} peak players`, r.steam_pct != null ? `${r.steam_pct}% positive` : ""].filter(Boolean).join(", ")
+        : [r.year, (r.platforms || []).slice(0, 3).join(", ")].filter(Boolean).join(", ");
       const hot = r.hot != null ? r.hot : /^\+/.test(r.reason || "");
       const reason = String(r.reason || "").replace(/^(New in Steam's top 100) this week$/, "$1");
       return `<li><span class="rank">${i + 1}</span>
-        <button class="open" data-act="open-row" data-igdb="${r.igdb_id}">${rowCover(r)}<span class="t-text"><b>${esc(r.name)}</b>
+        <button class="open" data-act="open-row" data-igdb="${r.igdb_id}">${rowCover(r, { sealed: !(shelf && myEntry(shelf.id)) })}<span class="t-text"><b>${esc(r.name)}</b>
           <span class="t-meta">${esc(meta)}</span><span class="reason${hot ? " hot" : ""}">${esc(reason)}</span>${line ? `<span class="t-status">${esc(line)}</span>` : ""}</span></button>
         ${wantButton(r.igdb_id, r.name)}</li>`;
     }).join("")}</ol>`;
@@ -886,7 +972,7 @@
       flag = `<span class="flag friend">${esc(names.slice(0, 2).join(" and "))}${names.length > 2 ? " and others" : ""} ${names.length === 1 ? "wants" : "want"} it</span>`;
     }
     return `<li class="${it.mine ? "mine" : ""}">${day}
-      <button class="open" data-act="open-row" data-igdb="${it.igdb_id}">${rowCover(it, { cls: "sm" })}<span class="t-text"><b>${esc(it.name)}</b>
+      <button class="open" data-act="open-row" data-igdb="${it.igdb_id}">${rowCover(it, { cls: "sm", sealed: true })}<span class="t-text"><b>${esc(it.name)}</b>
         ${plats ? `<span class="t-meta">${esc(plats)}</span>` : ""}${flag}</span></button>
       ${wantButton(it.igdb_id, it.name)}</li>`;
   }
@@ -912,11 +998,14 @@
       if (st.hours) bits.push(`${Math.round(st.hours)}h played`);
       const t = taste(p.id);
       const match = t && t.pct != null ? `<span class="match">${t.pct}% match</span>` : "";
+      const now = st.es.filter((e) => e.status === "playing" && idx.g[e.game_id]).sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+      const recent = st.es.filter((e) => idx.g[e.game_id]).sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5);
       return `<button class="friend" data-act="open-friend" data-id="${p.id}">
-        ${avatar(p.id)}
-        <div><div class="name">${esc(p.display_name)}${p.id === S.me ? ' <span class="subtle small">(you)</span>' : ""}${match}</div>
-          <div class="stats">${bits.join(", ")}</div></div>
-        <div class="big"><strong>${st.fin}</strong><span>finished</span></div>
+        <span class="f-top">${avatar(p.id)}
+          <span class="f-who"><span class="name">${esc(p.display_name)}${p.id === S.me ? ' <span class="subtle small">(you)</span>' : ""}</span>
+            <span class="stats">${now ? `Playing ${esc(idx.g[now.game_id].title)}` : esc(bits.join(", "))}</span></span>${match}</span>
+        ${recent.length ? `<span class="f-shelf"><span class="f-cases">${recent.map((e) => `<span class="f-case">${gameCover(idx.g[e.game_id], { cls: "sm", sealed: e.status === "want", sticker: e.status === "finished" ? `<span class="stk done">Completed</span>` : "" })}</span>`).join("")}</span><span class="ledge thin"></span></span>` : ""}
+        <span class="f-stats"><span><b>${st.fin}</b>completed</span><span><b>${st.playing}</b>playing</span><span><b>${Math.round(st.hours)}h</b>played</span></span>
       </button>`;
     }).join("");
 
@@ -992,13 +1081,28 @@
         ${inner}
       </div></div>`;
   }
-  function pageFrame(label, head, body) {
-    return `<div class="page" role="dialog" aria-modal="true" aria-label="${esc(label)}"><div class="page-inner">${head}<div class="g-body">${body}</div></div></div>`;
+  // A game page: the header is the opened case (disc in the tray), the body is the manual, a light paper sheet.
+  function pageFrame(label, head, body, { tint, hs }) {
+    const opening = S.sheet && !S.sheet.opened;
+    if (S.sheet) S.sheet.opened = true;
+    return `<div class="page${opening ? " opening" : ""}" role="dialog" aria-modal="true" aria-label="${esc(label)}" style="--hb:${tint.bg};--hm:${tint.soft}">
+      <div class="page-inner">${head}<div class="booklet" style="${styleVars(manualVars(hs[0], hs[1]))}"><div class="g-body">${body}</div></div></div></div>`;
   }
-  function pageHead({ title, cover, tint, meta, chips, right }) {
-    return `<header class="g-head" style="--hb:${tint.bg};--hm:${tint.soft}">
+  function caseHead({ url, tint, title }) {
+    const img = url ? `<img src="${esc(url)}" alt="" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
+    const name = `<span class="cv-t">${esc(title)}</span>`;
+    return `<div class="open-case" aria-hidden="true" style="--t:${tint.tile};--tm:${tint.soft}">
+      <div class="tray"><div class="disc"><div class="label">${img || name}</div><span class="hub"></span></div></div>
+      <div class="lid">
+        <div class="face back"><span class="clip" style="top:9%"></span><span class="clip" style="bottom:9%"></span><div class="ins">${img}</div></div>
+        <div class="face front"><div class="ins">${img || name}</div></div>
+      </div>
+    </div>`;
+  }
+  function pageHead({ title, art, meta, chips, right }) {
+    return `<header class="g-head">
       <div class="g-nav"><button class="btn round glass" data-act="close" aria-label="Back">${ICON.back}</button>${right || ""}</div>
-      ${cover}
+      ${caseHead(art)}
       <div><h1>${esc(title)}</h1>${meta ? `<div class="g-meta">${esc(meta)}</div>` : ""}</div>
       <div id="chips">${chips}</div>
     </header>`;
@@ -1016,6 +1120,8 @@
     else if (sh.kind === "share") html = shareSheet(sh.id);
     layer().innerHTML = html;
     document.body.style.overflow = "hidden";
+    const pg = $(".page.opening"); // the case-opening plays once; its end state is the page's resting state
+    if (pg) setTimeout(() => pg.classList.remove("opening"), 900);
     const first = $("#layer [autofocus]");
     if (first && !matchMedia("(pointer: coarse)").matches) first.focus();
   }
@@ -1080,7 +1186,7 @@
     const meta = [year, c && c.genres && c.genres[0], plats].filter(Boolean).join(", ");
     const canShare = mine && (mine.rating != null || mine.review || mine.status === "finished");
     const head = pageHead({
-      title: g.title, cover: gameCover(g, { size: "cover_big_2x" }), tint: gameTint(g), meta,
+      title: g.title, art: { url: coverUrl(g, "cover_big_2x"), tint: gameTint(g), title: g.title }, meta,
       chips: scoreChips(c, groupScore(id)),
       right: canShare ? `<button class="btn round glass" data-act="share-open" data-id="${id}" aria-label="Share my review">${ICON.share}</button>` : "",
     });
@@ -1120,7 +1226,7 @@
         </div>
         ${mine ? `<button type="button" class="btn danger block" data-act="remove-entry" data-id="${mine.id}">Remove from my shelf</button>` : ""}
       </div>`;
-    return pageFrame(g.title, head, body);
+    return pageFrame(g.title, head, body, { tint: gameTint(g), hs: gameHueSat(g) });
   }
 
   // A game from Discover or picks that isn't on the shelf yet.
@@ -1132,9 +1238,10 @@
     const img = r.cover_image_id;
     const year = full && full.first_release_date ? full.first_release_date.slice(0, 4) : r.year;
     const meta = [year, full && full.genres && full.genres[0], (r.platforms || []).slice(0, 3).join(", ")].filter(Boolean).join(", ");
+    const tint = tintFrom(full && full.cover_color, id);
     const head = pageHead({
-      title: name, tint: tintFrom(full && full.cover_color, id), meta,
-      cover: coverHTML({ title: name, url: img ? IGDB_IMG(img, "cover_big_2x") : "", tint: tintFrom(full && full.cover_color, id) }),
+      title: name, meta,
+      art: { url: img ? IGDB_IMG(img, "cover_big_2x") : "", tint, title: name },
       chips: full ? scoreChips(full, null) : r.critic_score != null ? scoreChips({ critic_score: r.critic_score }, null) : "",
     });
     const rel = releaseInfo(full);
@@ -1151,7 +1258,7 @@
         <p class="error" role="alert">${sh.error ? esc(sh.error) : ""}</p>
       </section>
       ${full ? aboutHTML(full) : sh.error ? "" : `<p class="subtle small" role="status">Loading details…</p>`}`;
-    return pageFrame(name, head, body);
+    return pageFrame(name, head, body, { tint, hs: hueSat(full && full.cover_color, id) });
   }
   async function loadExt(sh) {
     const id = sh.igdb;
@@ -1300,6 +1407,21 @@
   }
 
   // S21: the "Finished!" moment
+  // The finish moment: the disc drops back into its case, the case shuts, the Completed sticker slaps on.
+  function finishStage(g, play) {
+    const url = coverUrl(g, "cover_big");
+    const t = gameTint(g);
+    const img = url ? `<img src="${esc(url)}" alt="" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
+    const name = `<span class="cv-t">${esc(g.title)}</span>`;
+    return `<div class="finish-stage${play ? " play" : ""}" aria-hidden="true" style="--t:${t.tile};--tm:${t.soft}">
+      <div class="fs-case">
+        <div class="fs-tray"></div>
+        <div class="disc fs-disc"><div class="label">${img || name}</div><span class="hub"></span></div>
+        <div class="fs-lid"><div class="face back"></div><div class="face front"><div class="ins">${img || name}</div></div></div>
+        <span class="stk done">Completed</span>
+      </div>
+    </div>`;
+  }
   function finishSheet(id) {
     const g = idx.g[id];
     const mine = myEntry(id);
@@ -1307,12 +1429,14 @@
     if (!S.draft || S.draft.gameId !== id) S.draft = { gameId: id, rating: mine.rating, review: mine.review || "", spoiler: !!mine.spoiler };
     const d = S.draft;
     const t = took(mine);
+    const play = S.sheet && !S.sheet.opened;
+    if (S.sheet) S.sheet.opened = true;
     return sheetFrame("", `
-      <div class="finish-hero">${gameCover(g)}
-        <h1>You finished ${esc(g.title)}</h1>
-        <p class="subtle">${[t ? "You did it " + t : "", mine.hours ? fmtHours(mine.hours) + " played" : ""].filter(Boolean).join(", ") || "Nice one"}. How was it?</p>
+      <div class="finish-hero${play ? " play" : ""}">${finishStage(g, play)}
+        <h1>Back in its case.</h1>
+        <p class="subtle">You finished ${esc(g.title)}${[t ? " " + t : "", mine.hours ? ", " + fmtHours(mine.hours) + " played" : ""].join("")}. How was it?</p>
       </div>
-      <form data-form="finish" data-id="${id}">
+      <form data-form="finish" data-id="${id}" class="finish-form${play ? " play" : ""}">
         <div class="field"><span>Your rating</span>
           <div class="star-input" role="group" aria-label="Rating">${starInput(d.rating)}</div>
           <div class="rating-readout">${d.rating != null ? `${fmtRating(d.rating)} out of 5` : "Tap a star. Tap its left half for a half star."}</div>
@@ -1472,47 +1596,65 @@
     const W = 1080, H = 1350;
     const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
     const ctx = cv.getContext("2d");
-    const font = (w, px) => `${w} ${px}px Geologica, system-ui, -apple-system, sans-serif`;
+    const font = (w, px) => `${w} ${px}px "Funnel Display", system-ui, -apple-system, sans-serif`;
     try { await Promise.all([document.fonts.load(font(700, 72)), document.fonts.load(font(500, 34)), document.fonts.load(font(400, 36))]); } catch (_) {}
     const t = gameTint(g);
 
-    ctx.fillStyle = "#000000"; ctx.fillRect(0, 0, W, H);
-    // Tinted top panel, rounded at the bottom like the game page
-    const ph = 650, pr = 72;
-    ctx.fillStyle = t.bg;
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W, 0); ctx.lineTo(W, ph - pr); ctx.arcTo(W, ph, W - pr, ph, pr);
-    ctx.lineTo(pr, ph); ctx.arcTo(0, ph, 0, ph - pr, pr); ctx.closePath(); ctx.fill();
+    // The wall, in this game's colours
+    const [hh, hs] = gameHueSat(g);
+    const C = { wall: hsl(hh, hs, 0.13), lip: hsl(hh, hs * 0.9, 0.22), front: hsl(hh, hs, 0.085), ink: hsl(hh, 0.5, 0.94), ink2: hsl(hh, 0.26, 0.79), body: hsl(hh, 0.32, 0.87), dim: hsl(hh, 0.16, 0.64) };
+    ctx.fillStyle = C.wall; ctx.fillRect(0, 0, W, H);
 
-    // Cover
-    const cw = 360, ch = 480, cx = (W - cw) / 2, cy = 90;
-    ctx.save(); ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 70; ctx.shadowOffsetY = 28;
-    ctx.fillStyle = t.tile; rr(ctx, cx, cy, cw, ch, 28); ctx.fill(); ctx.restore();
-    ctx.save(); rr(ctx, cx, cy, cw, ch, 28); ctx.clip();
-    ctx.fillStyle = t.tile; ctx.fillRect(cx, cy, cw, ch);
+    // The case, standing on a ledge
+    const cw = 372, ch = 496, cx = (W - cw) / 2, cy = 96, ly = cy + ch;
+    ctx.fillStyle = C.lip; ctx.fillRect(0, ly, W, 22);
+    ctx.fillStyle = C.front; ctx.fillRect(0, ly + 22, W, 56);
+    ctx.save(); ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 50; ctx.shadowOffsetY = 18;
+    ctx.fillStyle = "#141416"; rr(ctx, cx, cy, cw, ch, 18); ctx.fill(); ctx.restore();
+    ctx.fillStyle = "#2E2F35"; rr(ctx, cx + 10, cy + 34, 9, ch - 68, 5); ctx.fill(); // hinge ridge
+    const ax = cx + 32, ay = cy + 13, aw = cw - 45, ah = ch - 26;
+    ctx.save(); rr(ctx, ax, ay, aw, ah, 6); ctx.clip();
+    ctx.fillStyle = t.tile; ctx.fillRect(ax, ay, aw, ah);
     const art = await loadImage(coverUrl(g, "cover_big_2x"));
     let drewArt = false;
     if (art) {
       try {
-        const s = Math.max(cw / art.width, ch / art.height);
-        const iw = art.width * s, ih = art.height * s;
-        ctx.drawImage(art, cx + (cw - iw) / 2, cy + (ch - ih) / 2, iw, ih);
+        const sc = Math.max(aw / art.width, ah / art.height);
+        const iw = art.width * sc, ih = art.height * sc;
+        ctx.drawImage(art, ax + (aw - iw) / 2, ay + (ah - ih) / 2, iw, ih);
         drewArt = true;
       } catch (_) { drewArt = false; }
     }
     if (!drewArt) {
-      ctx.fillStyle = t.soft; ctx.font = font(650, 46);
-      const tl = wrapLines(ctx, g.title, cw - 64, 4);
-      tl.forEach((s, i) => ctx.fillText(s, cx + 32, cy + ch - 40 - (tl.length - 1 - i) * 54));
+      ctx.fillStyle = t.soft; ctx.font = font(700, 44);
+      const tl = wrapLines(ctx, g.title, aw - 56, 4);
+      tl.forEach((s, i) => ctx.fillText(s, ax + 28, ay + ah - 36 - (tl.length - 1 - i) * 52));
     }
+    const glare = ctx.createLinearGradient(ax, ay, ax + aw * 0.5, ay + ah * 0.35);
+    glare.addColorStop(0, "rgba(255,255,255,0.18)"); glare.addColorStop(0.45, "rgba(255,255,255,0)");
+    ctx.fillStyle = glare; ctx.fillRect(ax, ay, aw, ah);
     ctx.restore();
+    // Sticker in the top-right corner
+    const stick = e.status === "finished" ? "Completed" : e.status === "dropped" ? "Traded in" : e.status === "paused" ? "Paused" : "";
+    if (stick === "Completed") {
+      ctx.save(); ctx.translate(cx + cw - 22, cy + 26); ctx.rotate(0.21);
+      ctx.fillStyle = "#F6D37A"; ctx.beginPath(); ctx.arc(0, 0, 82, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#2A1418"; ctx.font = font(800, 27); ctx.textAlign = "center"; ctx.fillText("Completed", 0, 10);
+      ctx.restore(); ctx.textAlign = "left";
+    } else if (stick) {
+      ctx.save(); ctx.translate(cx + cw - 30, cy + 20); ctx.rotate(stick === "Paused" ? -0.05 : -0.1);
+      ctx.font = font(800, 30); const sw = ctx.measureText(stick).width + 40;
+      ctx.fillStyle = C.ink; rr(ctx, -sw + 20, -26, sw, 54, 6); ctx.fill();
+      ctx.fillStyle = C.wall; ctx.fillText(stick, -sw + 40, 10); ctx.restore();
+    }
 
     // Text
     const x = 84;
-    let y = 745;
+    let y = ly + 150;
     const verb = VERB[e.status];
-    ctx.fillStyle = "#A1A1A8"; ctx.font = font(500, 34);
+    ctx.fillStyle = C.ink2; ctx.font = font(500, 34);
     ctx.fillText(`${me ? me.display_name : "I"} ${verb}`, x, y);
-    ctx.fillStyle = "#F2F2F3"; ctx.font = font(700, 70);
+    ctx.fillStyle = C.ink; ctx.font = font(800, 70);
     wrapLines(ctx, g.title, W - x * 2, 2).forEach((s) => { y += 80; ctx.fillText(s, x, y); });
     if (e.rating != null) {
       y += 34;
@@ -1529,23 +1671,24 @@
     if (e.review) {
       ctx.font = font(400, 36);
       if (includeReview) {
-        ctx.fillStyle = "#DADADD";
+        ctx.fillStyle = C.body;
         const room = Math.max(1, Math.min(5, Math.floor((bottomLimit - y - 16) / 50)));
         wrapLines(ctx, "“" + e.review.replace(/\s+/g, " ").trim() + "”", W - x * 2, room).forEach((q) => { y += 50; ctx.fillText(q, x, y); });
       } else if (e.spoiler) {
-        ctx.fillStyle = "#6E6E76"; y += 50; ctx.fillText("Review hidden: it has spoilers", x, y);
+        ctx.fillStyle = C.dim; y += 50; ctx.fillText("Review hidden: it has spoilers", x, y);
       }
     }
     // Footer
     const fy = H - 70;
-    if (metaParts.length) { ctx.fillStyle = "#A1A1A8"; ctx.font = font(500, 28); ctx.fillText(metaParts.join(", ").replace(/^./, (c) => c.toUpperCase()), x, fy); }
-    ctx.font = font(700, 32); ctx.fillStyle = "#F2F2F3";
+    if (metaParts.length) { ctx.fillStyle = C.ink2; ctx.font = font(500, 28); ctx.fillText(metaParts.join(", ").replace(/^./, (c) => c.toUpperCase()), x, fy); }
+    ctx.font = font(800, 32); ctx.fillStyle = C.ink;
     const brand = "Save Point"; const bw = ctx.measureText(brand).width;
     ctx.fillText(brand, W - x - bw, fy);
     const ix = W - x - bw - 44, iy = fy - 30;
-    ctx.fillStyle = "#F2F2F3"; rr(ctx, ix, iy, 30, 38, 6); ctx.fill();
-    ctx.fillStyle = "#000000"; starShape(ctx, ix + 15, iy + 19, 10); ctx.fill();
-    if (drewArt) { ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.font = font(400, 20); ctx.fillText("Cover art via IGDB", x, H - 24); }
+    ctx.fillStyle = "#141416"; rr(ctx, ix, iy, 30, 38, 5); ctx.fill();
+    ctx.fillStyle = C.ink; rr(ctx, ix + 7, iy + 3, 20, 32, 2); ctx.fill();
+    ctx.fillStyle = "#F6D37A"; ctx.beginPath(); ctx.arc(ix + 27, iy + 5, 8, 0, Math.PI * 2); ctx.fill();
+    if (drewArt) { ctx.fillStyle = C.dim; ctx.font = font(400, 20); ctx.fillText("Cover art via IGDB", x, H - 24); }
 
     return await new Promise((resolve, reject) => cv.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"));
   }
@@ -1569,12 +1712,15 @@
     });
   }
   let toastTimer;
-  function toast(msg) {
+  // action: optional { label, fn } button in the toast (e.g. Undo).
+  function toast(msg, action) {
     let t = $(".toast");
-    if (!t) { t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
-    t.textContent = msg;
+    if (!t) { t = document.createElement("div"); t.setAttribute("role", "status"); document.body.appendChild(t); }
+    t.className = "toast" + (action ? "" : " plain");
+    t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button type="button">${esc(action.label)}</button>` : ""}`;
+    if (action) t.querySelector("button").addEventListener("click", () => { clearTimeout(toastTimer); t.remove(); action.fn(); });
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.remove(), 2400);
+    toastTimer = setTimeout(() => t.remove(), action ? 4500 : 2400);
   }
 
   async function busy(btn, fn) {
@@ -1872,7 +2018,8 @@
   }
 
   // S17: quick session buttons
-  async function quickHours(gameId, delta) {
+  // opts.undo: offer Undo in the toast. opts.undone: this call is the undo.
+  async function quickHours(gameId, delta, opts = {}) {
     const e = myEntry(gameId);
     if (!e || !delta) return;
     const before = e.hours;
@@ -1881,7 +2028,9 @@
     reindex(); renderMain(); refreshOpenSheet();
     if (S.draft && S.draft.gameId === gameId) { S.draft.hours = e.hours; const f = $('form[data-form="entry"]'); if (f && f.hours) f.hours.value = e.hours; }
     const g = idx.g[gameId];
-    toast(`+${delta < 1 ? "30m" : delta + "h"} on ${g ? g.title : "this game"} (${fmtHours(e.hours)} total)`);
+    if (opts.undone) toast(`Undone. ${fmtHours(e.hours) || "0h"} on ${g ? g.title : "this game"}`);
+    else toast(`+${delta < 1 ? "30m" : delta + "h"} on ${g ? g.title : "this game"} (${fmtHours(e.hours)} total)`,
+      opts.undo ? { label: "Undo", fn: () => quickHours(gameId, -delta, { undone: true }) } : undefined);
     try {
       await queueFor(gameId, async () => {
         const live = myEntry(gameId);
@@ -2024,6 +2173,7 @@
 
   // ---------------- Wiring ----------------
   document.addEventListener("click", (ev) => {
+    if (suppressClick && ev.target.closest(".case-btn")) { suppressClick = false; ev.preventDefault(); return; }
     const el = ev.target.closest("[data-act]");
     if (!el) return;
     const fn = actions[el.dataset.act];
@@ -2074,6 +2224,35 @@
     if (swReg) swReg.update().catch(() => {});
   });
   window.addEventListener("pagehide", () => { if (S.me) lsSet("sp-seen", new Date().toISOString()); });
+
+  // ---------------- Hold a case on the Shelf to add an hour ----------------
+  let hold = null, suppressClick = false;
+  document.addEventListener("pointerdown", (ev) => {
+    const b = ev.target.closest(".case-btn[data-hold]");
+    if (!b || (ev.pointerType === "mouse" && ev.button !== 0)) return;
+    endHold();
+    const id = b.dataset.id;
+    b.classList.add("holding");
+    hold = { b, x: ev.clientX, y: ev.clientY, t: setTimeout(() => {
+      hold.fired = true;
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 700);
+      if (navigator.vibrate) navigator.vibrate(12);
+      quickHours(id, 1, { undo: true });
+      const nb = $(`.case-btn[data-id="${id}"]`); // the wall re-rendered: bump the new case
+      if (nb) { nb.classList.add("bump"); setTimeout(() => nb.classList.remove("bump"), 500); }
+    }, 450) };
+  });
+  function endHold() {
+    if (!hold) return;
+    clearTimeout(hold.t);
+    hold.b.classList.remove("holding");
+    hold = null;
+  }
+  document.addEventListener("pointermove", (ev) => { if (hold && Math.hypot(ev.clientX - hold.x, ev.clientY - hold.y) > 10) endHold(); });
+  document.addEventListener("pointerup", endHold);
+  document.addEventListener("pointercancel", endHold);
+  document.addEventListener("contextmenu", (ev) => { if (ev.target.closest(".case-btn")) ev.preventDefault(); });
 
   // ---------------- S19: gestures ----------------
   // Swipe a sheet down to close it; swipe a game page right from the left edge to go back; pull the main screen to refresh.
