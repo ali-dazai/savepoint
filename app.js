@@ -305,7 +305,7 @@
   function rowCover(r, opts = {}) {
     const c = catRow(r.igdb_id);
     const img = r.cover_image_id || (c && c.cover_image_id);
-    return coverHTML({ title: r.name, url: img ? IGDB_IMG(img, opts.size || "cover_big") : "", tint: rowTint(r), cls: opts.cls });
+    return coverHTML({ title: r.name, url: img ? IGDB_IMG(img, opts.size || "cover_big") : "", tint: rowTint(r), cls: opts.cls, sealed: opts.sealed, sticker: opts.sticker });
   }
   function markHTML() { return `<div class="mark" aria-hidden="true"><i></i><i></i><i>${ICON.star}</i></div>`; }
   function spoilerText(e, cls) {
@@ -654,26 +654,35 @@
       .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
       .slice(0, 80);
 
+    // Top: your current case, big, with +1 hour. If you're not playing anything, the most recent friend's.
     let top = "";
-    if (playing.length) {
-      const h = playing[0], g = idx.g[h.game_id], t = gameTint(g);
-      const bits = [];
-      if (h.hours) bits.push(`${fmtHours(h.hours)} so far`);
-      if (h.started_at) bits.push(`started ${since(h.started_at)}`);
-      const who = h.user_id === S.me ? "You're playing" : `${nameOf(h.user_id)} is playing`;
-      top = `<button class="hero" style="--hb:${t.bg};--hm:${t.soft}" data-act="open-game" data-id="${g.id}" aria-label="${esc(who)} ${esc(g.title)}">
-          ${gameCover(g)}
-          <span class="hero-text"><span><span class="hero-who">${avatar(h.user_id, "sm")}${esc(who)}</span><b class="hero-title">${esc(g.title)}</b></span>
-          <span class="hero-meta">${esc(bits.join(", ") || "Just started")}</span></span>
-        </button>`;
-      const rest = playing.slice(1, 5);
-      if (rest.length) {
-        top += `<div class="also">${rest.map((e) => {
+    const h = playing.find((e) => e.user_id === S.me) || playing[0];
+    if (h) {
+      const g = idx.g[h.game_id];
+      const mineTop = h.user_id === S.me;
+      const who = mineTop ? "You're playing" : `${nameOf(h.user_id)} is playing`;
+      const sub = [h.started_at ? `started ${since(h.started_at)}` : "", mineTop && h.updated_at ? `last played ${ago(h.updated_at)}` : ""].filter(Boolean).join(", ");
+      top = `<section class="now">
+        <button class="now-case case-btn" data-act="open-game" data-id="${g.id}"${mineTop ? ' data-hold="1"' : ""} aria-label="${esc(who)} ${esc(g.title)}">${gameCover(g, { wear: wearOf(h.hours || 0) })}</button>
+        <div class="now-text">
+          <div class="now-who">${mineTop ? "" : avatar(h.user_id, "sm")}${esc(who)}</div>
+          <button class="now-title link-btn" data-act="open-game" data-id="${g.id}">${esc(g.title)}</button>
+          <div class="now-hours">${h.hours ? fmtHours(h.hours) : "0h"}</div>
+          ${sub ? `<div class="now-sub">${esc(sub)}</div>` : ""}
+          ${mineTop ? `<button class="btn now-add" data-act="quick-hours" data-id="${g.id}" data-delta="1">+1 hour</button>` : ""}
+        </div>
+      </section>`;
+    }
+    // Everyone else's current games, standing on a shelf.
+    const rest = playing.filter((e) => e !== h).slice(0, 8);
+    if (rest.length) {
+      top += `<section class="section"><h2 class="section-title">On everyone's shelf now</h2>
+        <div class="mini-shelf"><div class="mini-cases">${rest.map((e) => {
           const g2 = idx.g[e.game_id];
-          return `<button data-act="open-game" data-id="${g2.id}" aria-label="${esc(nameOf(e.user_id))}: ${esc(g2.title)}">${gameCover(g2, { cls: "sm" })}
-            <span class="also-text"><b>${esc(nameOf(e.user_id))}</b><span>${esc(g2.title)}</span></span></button>`;
-        }).join("")}</div>`;
-      }
+          return `<button class="mini" data-act="open-game" data-id="${g2.id}" aria-label="${esc(nameOf(e.user_id))} is playing ${esc(g2.title)}">
+            <span class="mini-case">${gameCover(g2, { cls: "sm" })}${avatar(e.user_id, "sm mini-av")}</span>
+            <span class="mini-name">${esc(e.user_id === S.me ? "You" : nameOf(e.user_id))}</span></button>`;
+        }).join("")}</div><div class="ledge thin"></div></div></section>`;
     }
 
     const isNew = (e) => S.seenAt && e.user_id !== S.me && e.updated_at > S.seenAt;
@@ -704,14 +713,14 @@
   function pickCard(p) {
     if (p.kind === "friend") {
       return `<button class="rail-item" data-act="open-game" data-id="${p.game.id}" aria-label="${esc(p.game.title)}: ${esc(p.reason)}">
-        ${gameCover(p.game)}
+        ${gameCover(p.game, { sealed: true })}
         <div class="rail-title">${esc(p.game.title)}</div>
         <div class="rail-why">${esc(p.reason)}</div>
       </button>`;
     }
     const r = p.row;
     return `<button class="rail-item" data-act="open-row" data-igdb="${r.igdb_id}" data-why="${esc(p.reason)}" aria-label="${esc(r.name)}: ${esc(p.reason)}">
-      ${rowCover(r)}
+      ${rowCover(r, { sealed: true })}
       <div class="rail-title">${esc(r.name)}</div>
       <div class="rail-why">${esc(p.reason)}</div>
     </button>`;
@@ -721,7 +730,7 @@
     const g = idx.g[e.game_id];
     const t = e.status === "finished" ? took(e) : "";
     return `<li class="feed-item${fresh ? " is-new" : ""}">
-      <button class="thumb" data-act="open-game" data-id="${g.id}" aria-label="Open ${esc(g.title)}">${gameCover(g, { cls: "sm" })}</button>
+      <button class="thumb" data-act="open-game" data-id="${g.id}" aria-label="Open ${esc(g.title)}">${gameCover(g, { cls: "sm", sealed: e.status === "want", sticker: e.status === "finished" ? `<span class="stk done">Completed</span>` : "" })}</button>
       <div>
         <div class="what"><b>${esc(nameOf(e.user_id))}</b> ${verbFor(e)} <button class="link-btn" data-act="open-game" data-id="${g.id}">${esc(g.title)}</button></div>
         <div class="when">${e.rating != null ? stars(e.rating, 12) + " " : ""}${ago(e.updated_at)}${e.hours ? ", " + fmtHours(e.hours) + " played" : ""}${t ? ", " + t : ""}</div>
@@ -855,18 +864,18 @@
   }
   function trendingHTML(d) {
     const items = d.trending || [];
-    const note = "From Steam's live most-played chart: new arrivals and fast climbers first, then this year's big games.";
+    const note = "Steam's most played right now: new arrivals and fast climbers first. Tap + to put a sealed copy on your shelf.";
     if (!items.length) return `<p class="nudge">Nothing to show yet. Check back later.</p>`;
     return `<p class="disc-note">${note}</p><ol class="trend">${items.map((r, i) => {
       const shelf = idx.byIgdb[r.igdb_id];
       const line = shelf ? groupLine(shelf.id) : "";
       const meta = r.peak
-        ? [`${fmtNum(r.peak)} peak players`, r.steam_pct != null ? `${r.steam_pct}% positive` : ""].filter(Boolean).join(" · ")
-        : [r.year, (r.platforms || []).slice(0, 3).join(", ")].filter(Boolean).join(" · ");
+        ? [`${fmtNum(r.peak)} peak players`, r.steam_pct != null ? `${r.steam_pct}% positive` : ""].filter(Boolean).join(", ")
+        : [r.year, (r.platforms || []).slice(0, 3).join(", ")].filter(Boolean).join(", ");
       const hot = r.hot != null ? r.hot : /^\+/.test(r.reason || "");
       const reason = String(r.reason || "").replace(/^(New in Steam's top 100) this week$/, "$1");
       return `<li><span class="rank">${i + 1}</span>
-        <button class="open" data-act="open-row" data-igdb="${r.igdb_id}">${rowCover(r)}<span class="t-text"><b>${esc(r.name)}</b>
+        <button class="open" data-act="open-row" data-igdb="${r.igdb_id}">${rowCover(r, { sealed: !(shelf && myEntry(shelf.id)) })}<span class="t-text"><b>${esc(r.name)}</b>
           <span class="t-meta">${esc(meta)}</span><span class="reason${hot ? " hot" : ""}">${esc(reason)}</span>${line ? `<span class="t-status">${esc(line)}</span>` : ""}</span></button>
         ${wantButton(r.igdb_id, r.name)}</li>`;
     }).join("")}</ol>`;
@@ -963,7 +972,7 @@
       flag = `<span class="flag friend">${esc(names.slice(0, 2).join(" and "))}${names.length > 2 ? " and others" : ""} ${names.length === 1 ? "wants" : "want"} it</span>`;
     }
     return `<li class="${it.mine ? "mine" : ""}">${day}
-      <button class="open" data-act="open-row" data-igdb="${it.igdb_id}">${rowCover(it, { cls: "sm" })}<span class="t-text"><b>${esc(it.name)}</b>
+      <button class="open" data-act="open-row" data-igdb="${it.igdb_id}">${rowCover(it, { cls: "sm", sealed: true })}<span class="t-text"><b>${esc(it.name)}</b>
         ${plats ? `<span class="t-meta">${esc(plats)}</span>` : ""}${flag}</span></button>
       ${wantButton(it.igdb_id, it.name)}</li>`;
   }
@@ -989,11 +998,14 @@
       if (st.hours) bits.push(`${Math.round(st.hours)}h played`);
       const t = taste(p.id);
       const match = t && t.pct != null ? `<span class="match">${t.pct}% match</span>` : "";
+      const now = st.es.filter((e) => e.status === "playing" && idx.g[e.game_id]).sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0];
+      const recent = st.es.filter((e) => idx.g[e.game_id]).sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5);
       return `<button class="friend" data-act="open-friend" data-id="${p.id}">
-        ${avatar(p.id)}
-        <div><div class="name">${esc(p.display_name)}${p.id === S.me ? ' <span class="subtle small">(you)</span>' : ""}${match}</div>
-          <div class="stats">${bits.join(", ")}</div></div>
-        <div class="big"><strong>${st.fin}</strong><span>finished</span></div>
+        <span class="f-top">${avatar(p.id)}
+          <span class="f-who"><span class="name">${esc(p.display_name)}${p.id === S.me ? ' <span class="subtle small">(you)</span>' : ""}</span>
+            <span class="stats">${now ? `Playing ${esc(idx.g[now.game_id].title)}` : esc(bits.join(", "))}</span></span>${match}</span>
+        ${recent.length ? `<span class="f-shelf"><span class="f-cases">${recent.map((e) => `<span class="f-case">${gameCover(idx.g[e.game_id], { cls: "sm", sealed: e.status === "want", sticker: e.status === "finished" ? `<span class="stk done">Completed</span>` : "" })}</span>`).join("")}</span><span class="ledge thin"></span></span>` : ""}
+        <span class="f-stats"><span><b>${st.fin}</b>completed</span><span><b>${st.playing}</b>playing</span><span><b>${Math.round(st.hours)}h</b>played</span></span>
       </button>`;
     }).join("");
 
@@ -1395,6 +1407,21 @@
   }
 
   // S21: the "Finished!" moment
+  // The finish moment: the disc drops back into its case, the case shuts, the Completed sticker slaps on.
+  function finishStage(g, play) {
+    const url = coverUrl(g, "cover_big");
+    const t = gameTint(g);
+    const img = url ? `<img src="${esc(url)}" alt="" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
+    const name = `<span class="cv-t">${esc(g.title)}</span>`;
+    return `<div class="finish-stage${play ? " play" : ""}" aria-hidden="true" style="--t:${t.tile};--tm:${t.soft}">
+      <div class="fs-case">
+        <div class="fs-tray"></div>
+        <div class="disc fs-disc"><div class="label">${img || name}</div><span class="hub"></span></div>
+        <div class="fs-lid"><div class="face back"></div><div class="face front"><div class="ins">${img || name}</div></div></div>
+        <span class="stk done">Completed</span>
+      </div>
+    </div>`;
+  }
   function finishSheet(id) {
     const g = idx.g[id];
     const mine = myEntry(id);
@@ -1402,12 +1429,14 @@
     if (!S.draft || S.draft.gameId !== id) S.draft = { gameId: id, rating: mine.rating, review: mine.review || "", spoiler: !!mine.spoiler };
     const d = S.draft;
     const t = took(mine);
+    const play = S.sheet && !S.sheet.opened;
+    if (S.sheet) S.sheet.opened = true;
     return sheetFrame("", `
-      <div class="finish-hero">${gameCover(g)}
-        <h1>You finished ${esc(g.title)}</h1>
-        <p class="subtle">${[t ? "You did it " + t : "", mine.hours ? fmtHours(mine.hours) + " played" : ""].filter(Boolean).join(", ") || "Nice one"}. How was it?</p>
+      <div class="finish-hero${play ? " play" : ""}">${finishStage(g, play)}
+        <h1>Back in its case.</h1>
+        <p class="subtle">You finished ${esc(g.title)}${[t ? " " + t : "", mine.hours ? ", " + fmtHours(mine.hours) + " played" : ""].join("")}. How was it?</p>
       </div>
-      <form data-form="finish" data-id="${id}">
+      <form data-form="finish" data-id="${id}" class="finish-form${play ? " play" : ""}">
         <div class="field"><span>Your rating</span>
           <div class="star-input" role="group" aria-label="Rating">${starInput(d.rating)}</div>
           <div class="rating-readout">${d.rating != null ? `${fmtRating(d.rating)} out of 5` : "Tap a star. Tap its left half for a half star."}</div>
@@ -1571,43 +1600,61 @@
     try { await Promise.all([document.fonts.load(font(700, 72)), document.fonts.load(font(500, 34)), document.fonts.load(font(400, 36))]); } catch (_) {}
     const t = gameTint(g);
 
-    ctx.fillStyle = "#000000"; ctx.fillRect(0, 0, W, H);
-    // Tinted top panel, rounded at the bottom like the game page
-    const ph = 650, pr = 72;
-    ctx.fillStyle = t.bg;
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W, 0); ctx.lineTo(W, ph - pr); ctx.arcTo(W, ph, W - pr, ph, pr);
-    ctx.lineTo(pr, ph); ctx.arcTo(0, ph, 0, ph - pr, pr); ctx.closePath(); ctx.fill();
+    // The wall, in this game's colours
+    const [hh, hs] = gameHueSat(g);
+    const C = { wall: hsl(hh, hs, 0.13), lip: hsl(hh, hs * 0.9, 0.22), front: hsl(hh, hs, 0.085), ink: hsl(hh, 0.5, 0.94), ink2: hsl(hh, 0.26, 0.79), body: hsl(hh, 0.32, 0.87), dim: hsl(hh, 0.16, 0.64) };
+    ctx.fillStyle = C.wall; ctx.fillRect(0, 0, W, H);
 
-    // Cover
-    const cw = 360, ch = 480, cx = (W - cw) / 2, cy = 90;
-    ctx.save(); ctx.shadowColor = "rgba(0,0,0,0.6)"; ctx.shadowBlur = 70; ctx.shadowOffsetY = 28;
-    ctx.fillStyle = t.tile; rr(ctx, cx, cy, cw, ch, 28); ctx.fill(); ctx.restore();
-    ctx.save(); rr(ctx, cx, cy, cw, ch, 28); ctx.clip();
-    ctx.fillStyle = t.tile; ctx.fillRect(cx, cy, cw, ch);
+    // The case, standing on a ledge
+    const cw = 372, ch = 496, cx = (W - cw) / 2, cy = 96, ly = cy + ch;
+    ctx.fillStyle = C.lip; ctx.fillRect(0, ly, W, 22);
+    ctx.fillStyle = C.front; ctx.fillRect(0, ly + 22, W, 56);
+    ctx.save(); ctx.shadowColor = "rgba(0,0,0,0.55)"; ctx.shadowBlur = 50; ctx.shadowOffsetY = 18;
+    ctx.fillStyle = "#141416"; rr(ctx, cx, cy, cw, ch, 18); ctx.fill(); ctx.restore();
+    ctx.fillStyle = "#2E2F35"; rr(ctx, cx + 10, cy + 34, 9, ch - 68, 5); ctx.fill(); // hinge ridge
+    const ax = cx + 32, ay = cy + 13, aw = cw - 45, ah = ch - 26;
+    ctx.save(); rr(ctx, ax, ay, aw, ah, 6); ctx.clip();
+    ctx.fillStyle = t.tile; ctx.fillRect(ax, ay, aw, ah);
     const art = await loadImage(coverUrl(g, "cover_big_2x"));
     let drewArt = false;
     if (art) {
       try {
-        const s = Math.max(cw / art.width, ch / art.height);
-        const iw = art.width * s, ih = art.height * s;
-        ctx.drawImage(art, cx + (cw - iw) / 2, cy + (ch - ih) / 2, iw, ih);
+        const sc = Math.max(aw / art.width, ah / art.height);
+        const iw = art.width * sc, ih = art.height * sc;
+        ctx.drawImage(art, ax + (aw - iw) / 2, ay + (ah - ih) / 2, iw, ih);
         drewArt = true;
       } catch (_) { drewArt = false; }
     }
     if (!drewArt) {
-      ctx.fillStyle = t.soft; ctx.font = font(650, 46);
-      const tl = wrapLines(ctx, g.title, cw - 64, 4);
-      tl.forEach((s, i) => ctx.fillText(s, cx + 32, cy + ch - 40 - (tl.length - 1 - i) * 54));
+      ctx.fillStyle = t.soft; ctx.font = font(700, 44);
+      const tl = wrapLines(ctx, g.title, aw - 56, 4);
+      tl.forEach((s, i) => ctx.fillText(s, ax + 28, ay + ah - 36 - (tl.length - 1 - i) * 52));
     }
+    const glare = ctx.createLinearGradient(ax, ay, ax + aw * 0.5, ay + ah * 0.35);
+    glare.addColorStop(0, "rgba(255,255,255,0.18)"); glare.addColorStop(0.45, "rgba(255,255,255,0)");
+    ctx.fillStyle = glare; ctx.fillRect(ax, ay, aw, ah);
     ctx.restore();
+    // Sticker in the top-right corner
+    const stick = e.status === "finished" ? "Completed" : e.status === "dropped" ? "Traded in" : e.status === "paused" ? "Paused" : "";
+    if (stick === "Completed") {
+      ctx.save(); ctx.translate(cx + cw - 22, cy + 26); ctx.rotate(0.21);
+      ctx.fillStyle = "#F6D37A"; ctx.beginPath(); ctx.arc(0, 0, 82, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#2A1418"; ctx.font = font(800, 27); ctx.textAlign = "center"; ctx.fillText("Completed", 0, 10);
+      ctx.restore(); ctx.textAlign = "left";
+    } else if (stick) {
+      ctx.save(); ctx.translate(cx + cw - 30, cy + 20); ctx.rotate(stick === "Paused" ? -0.05 : -0.1);
+      ctx.font = font(800, 30); const sw = ctx.measureText(stick).width + 40;
+      ctx.fillStyle = C.ink; rr(ctx, -sw + 20, -26, sw, 54, 6); ctx.fill();
+      ctx.fillStyle = C.wall; ctx.fillText(stick, -sw + 40, 10); ctx.restore();
+    }
 
     // Text
     const x = 84;
-    let y = 745;
+    let y = ly + 150;
     const verb = VERB[e.status];
-    ctx.fillStyle = "#A1A1A8"; ctx.font = font(500, 34);
+    ctx.fillStyle = C.ink2; ctx.font = font(500, 34);
     ctx.fillText(`${me ? me.display_name : "I"} ${verb}`, x, y);
-    ctx.fillStyle = "#F2F2F3"; ctx.font = font(700, 70);
+    ctx.fillStyle = C.ink; ctx.font = font(800, 70);
     wrapLines(ctx, g.title, W - x * 2, 2).forEach((s) => { y += 80; ctx.fillText(s, x, y); });
     if (e.rating != null) {
       y += 34;
@@ -1624,23 +1671,24 @@
     if (e.review) {
       ctx.font = font(400, 36);
       if (includeReview) {
-        ctx.fillStyle = "#DADADD";
+        ctx.fillStyle = C.body;
         const room = Math.max(1, Math.min(5, Math.floor((bottomLimit - y - 16) / 50)));
         wrapLines(ctx, "“" + e.review.replace(/\s+/g, " ").trim() + "”", W - x * 2, room).forEach((q) => { y += 50; ctx.fillText(q, x, y); });
       } else if (e.spoiler) {
-        ctx.fillStyle = "#6E6E76"; y += 50; ctx.fillText("Review hidden: it has spoilers", x, y);
+        ctx.fillStyle = C.dim; y += 50; ctx.fillText("Review hidden: it has spoilers", x, y);
       }
     }
     // Footer
     const fy = H - 70;
-    if (metaParts.length) { ctx.fillStyle = "#A1A1A8"; ctx.font = font(500, 28); ctx.fillText(metaParts.join(", ").replace(/^./, (c) => c.toUpperCase()), x, fy); }
-    ctx.font = font(700, 32); ctx.fillStyle = "#F2F2F3";
+    if (metaParts.length) { ctx.fillStyle = C.ink2; ctx.font = font(500, 28); ctx.fillText(metaParts.join(", ").replace(/^./, (c) => c.toUpperCase()), x, fy); }
+    ctx.font = font(800, 32); ctx.fillStyle = C.ink;
     const brand = "Save Point"; const bw = ctx.measureText(brand).width;
     ctx.fillText(brand, W - x - bw, fy);
     const ix = W - x - bw - 44, iy = fy - 30;
-    ctx.fillStyle = "#F2F2F3"; rr(ctx, ix, iy, 30, 38, 6); ctx.fill();
-    ctx.fillStyle = "#000000"; starShape(ctx, ix + 15, iy + 19, 10); ctx.fill();
-    if (drewArt) { ctx.fillStyle = "rgba(255,255,255,0.35)"; ctx.font = font(400, 20); ctx.fillText("Cover art via IGDB", x, H - 24); }
+    ctx.fillStyle = "#141416"; rr(ctx, ix, iy, 30, 38, 5); ctx.fill();
+    ctx.fillStyle = C.ink; rr(ctx, ix + 7, iy + 3, 20, 32, 2); ctx.fill();
+    ctx.fillStyle = "#F6D37A"; ctx.beginPath(); ctx.arc(ix + 27, iy + 5, 8, 0, Math.PI * 2); ctx.fill();
+    if (drewArt) { ctx.fillStyle = C.dim; ctx.font = font(400, 20); ctx.fillText("Cover art via IGDB", x, H - 24); }
 
     return await new Promise((resolve, reject) => cv.toBlob((b) => (b ? resolve(b) : reject(new Error("toBlob failed"))), "image/png"));
   }

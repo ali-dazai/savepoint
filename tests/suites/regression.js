@@ -108,6 +108,7 @@ const out = path.join(__dirname, '..', '..', 'test-results', 'regression'); fs.m
   await page.click('form[data-form=entry] button[type=submit]');
   await page.waitForSelector('form[data-form=finish]');
   check('S18 instant (finish sheet in ' + (Date.now() - t0) + 'ms)', Date.now() - t0 < 1500);
+  check('Finish moment: disc goes back in its case, Completed sticker', await page.locator('.finish-stage.play .fs-disc').count() === 1 && await page.locator('.finish-stage .stk.done').count() === 1);
   await shot('06-finish-moment');
   const star = page.locator('.star-btn').nth(4); const b = await star.boundingBox();
   await page.mouse.click(b.x + b.width - 4, b.y + b.height / 2);
