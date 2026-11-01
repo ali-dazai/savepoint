@@ -410,7 +410,11 @@
         <p class="error" role="alert"></p>
         <button class="btn block" type="submit">${signup ? "Create account" : "Sign in"}</button>
       </form>
-      <p class="switch">${signup ? "Already have an account?" : "New here?"} <button data-act="auth-mode" data-mode="${signup ? "signin" : "signup"}">${signup ? "Sign in" : "Create an account"}</button></p>`);
+      <p class="switch">${signup ? "Already have an account?" : "New here?"} <button data-act="auth-mode" data-mode="${signup ? "signin" : "signup"}">${signup ? "Sign in" : "Create an account"}</button></p>
+      <div class="demo-cta">
+        <button class="btn secondary block" data-act="try-demo">Try the demo</button>
+        <p>Look around with sample games first. Nothing you do is saved to an account.</p>
+      </div>`);
   }
 
   function renderJoin(message) {
@@ -571,6 +575,8 @@
   }
   // Re-render without yanking the keyboard away from someone typing in a search box.
   function safeRenderMain() {
+    // Background updates only refresh the main screens; they must never cover sign-in (e.g. demo data arriving after Exit demo).
+    if (!S.me || !$("#main")) return;
     const a = document.activeElement;
     if (a && a.closest && a.closest("#main") && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
     renderMain();
@@ -1795,6 +1801,8 @@
     },
     "auth-mode"(el) { renderAuth(el.dataset.mode); },
     "start-demo"() { lsSet("sp-demo", "1"); start(); },
+    // Demo from the sign-in screen: lives in the URL (?demo), so reopening the app lands on sign-in again (S1).
+    "try-demo"() { history.replaceState(null, "", location.pathname + "?demo" + location.hash); start(); },
     "exit-demo"() { lsSet("sp-demo", null); closeSheet(); if (location.search.includes("demo")) history.replaceState(null, "", location.pathname + location.hash); start(); },
     async "reset-demo"() {
       const ok = await confirmDialog({ title: "Reset demo data?", body: "Your demo changes will be replaced with the sample games.", ok: "Reset" });
@@ -2152,7 +2160,7 @@
   async function start() {
     renderLoading();
     if (S.api && S.api.unsubscribe) S.api.unsubscribe();
-    S.disc = null; S.ext = {}; S.similar = null;
+    S.disc = null; S.ext = {}; S.similar = null; S.me = null;
     const params = new URLSearchParams(location.search);
     const cfg = window.SAVEPOINT_CONFIG || {};
     const configured = cfg.supabaseUrl && cfg.supabaseAnonKey && window.supabase;

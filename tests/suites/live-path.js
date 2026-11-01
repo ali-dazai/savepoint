@@ -52,6 +52,17 @@ const { chromium, devices } = require('playwright');
   await page.goto(BASE + '/');
   await page.waitForSelector('form[data-form=signin]');
   check('S1 configured app ignores old demo flag', await page.locator('.demo-bar').count() === 0);
+  // Try the demo from the sign-in screen, then exit back to sign-in
+  await page.click('[data-act=try-demo]');
+  await page.waitForSelector('.demo-bar');
+  check('Try the demo opens demo mode', new URL(page.url()).searchParams.has('demo') && await page.locator('.tabbar').count() === 1);
+  check('demo makes no Supabase calls', !calls.some(c => c.startsWith('POST /rest') || c.startsWith('PATCH')));
+  await page.click('.demo-bar [data-act=exit-demo]');
+  await page.waitForSelector('form[data-form=signin]');
+  check('Exit demo returns to sign-in, URL clean', !new URL(page.url()).searchParams.has('demo'));
+  await page.click('[data-act=auth-mode][data-mode=signup]');
+  check('demo button on create-account screen too', await page.locator('[data-act=try-demo]').count() === 1);
+  await page.click('[data-act=auth-mode][data-mode=signin]');
   await page.fill('input[name=email]', 'ali@example.com'); await page.fill('input[name=password]', 'secret1');
   await page.click('button[type=submit]');
   await page.waitForSelector('.tabbar');
