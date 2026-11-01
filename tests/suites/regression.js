@@ -33,12 +33,33 @@ const out = path.join(__dirname, '..', '..', 'test-results', 'regression'); fs.m
   // S17: quick +1h on shelf
   await page.click('[data-tab=shelf]');
   await page.click('[data-act=scope][data-scope=mine]');
-  const q = page.locator('.quick').first();
-  check('S17 quick button on playing tile', await q.count() >= 1);
-  await q.click();
+  // Case Wall: hold a case to add an hour (with Undo)
+  check('Case Wall: shelf is a wall of cases on ledges', await page.locator('.wall .shelf-row .ledge .lbl').count() >= 1 && await page.locator('.wall .case-btn .cv .art').count() >= 1);
+  check('Case Wall: playing case stands forward', await page.locator('.case-btn.out').count() >= 1);
+  check('Case Wall: finished game has a Completed sticker', await page.locator('.case-btn .stk.done').count() >= 1);
+  check('Case Wall: want-to-play game is shrink-wrapped', await page.locator('.case-btn .wrap').count() >= 1);
+  check('Case Wall: wall tinted from your game', await page.evaluate(() => /hsl/.test(document.documentElement.style.getPropertyValue('--bg'))));
+  const held = page.locator('.case-btn.out[data-hold]').first();
+  const heldId = await held.getAttribute('data-id');
+  const box = await held.boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down(); await page.waitForTimeout(650); await page.mouse.up();
   await page.waitForTimeout(300);
   const toastTxt = await page.locator('.toast').innerText().catch(() => '');
-  check('S17 toast shows new total: ' + toastTxt, /\+1h on .*\(\d/.test(toastTxt));
+  check('S17 hold adds an hour, toast shows new total: ' + toastTxt.replace(/\n/g, ' '), /\+1h on .*\(\d/.test(toastTxt) && /Undo/.test(toastTxt));
+  check('hold does not open the game', await page.locator('.page').count() === 0);
+  const lblBefore = await page.locator(`.case-btn[data-id="${heldId}"]`).getAttribute('aria-label');
+  await page.click('.toast button');
+  await page.waitForTimeout(300);
+  check('Undo takes the hour back: ' + (await page.locator('.toast').innerText().catch(() => '')), /Undone/.test(await page.locator('.toast').innerText().catch(() => '')) && (await page.locator(`.case-btn[data-id="${heldId}"]`).getAttribute('aria-label')) !== lblBefore);
+  // a short tap still opens the case
+  await page.locator(`.case-btn[data-id="${heldId}"]`).click();
+  await page.waitForSelector('.page .open-case');
+  check('Case Wall: game page opens the case (lid, disc, booklet)', await page.locator('.page.opening .lid').count() === 1 && await page.locator('.open-case .disc').count() === 1 && await page.locator('.booklet form[data-form=entry]').count() === 1);
+  await page.waitForTimeout(1000);
+  await page.click('[data-act=pick-status][data-status=paused]');
+  check('Case Wall: re-render does not replay the opening', await page.locator('.page.opening').count() === 0);
+  await page.click('[data-act=close]');
   await shot('02-shelf-quick');
 
   // S31: add via catalogue
@@ -76,7 +97,7 @@ const out = path.join(__dirname, '..', '..', 'test-results', 'regression'); fs.m
   await page.click('[data-tab=shelf]');
   await page.click('[data-act=scope][data-scope=mine]');
   await page.fill('input[name=q]', 'baldur');
-  await page.click('.tile');
+  await page.click('.case-btn');
   await page.waitForSelector('form[data-form=entry]');
   check('S17 sessions row in game sheet', await page.locator('.sessions .chip').count() === 3);
   check('S20 date fields shown', await page.locator('input[name=started_at]').count() === 1);
@@ -105,7 +126,7 @@ const out = path.join(__dirname, '..', '..', 'test-results', 'regression'); fs.m
   await page.click('[data-act=scope][data-scope=all]');
   await page.fill('input[name=q]', '');
   await page.fill('input[name=q]', 'stardew');
-  await page.click('.tile');
+  await page.click('.case-btn');
   await page.click('[data-act=edit-game]');
   await shot('08-edit-link');
   await page.click('[data-act=link-start]');
@@ -157,7 +178,7 @@ const out = path.join(__dirname, '..', '..', 'test-results', 'regression'); fs.m
   // Friend review spoiler in game sheet
   await page.click('[data-tab=shelf]');
   await page.fill('input[name=q]', 'outer');
-  await page.click('.tile');
+  await page.click('.case-btn');
   check('S24 revealed spoiler stays open this session', await page.locator('#others .spoiler').count() === 0 && (await page.locator('#others').innerText()).includes('first campfire'));
   await shot('11-game-spoiler');
   await page.click('[data-act=close]');

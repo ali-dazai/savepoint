@@ -12,7 +12,7 @@ const { chromium, devices } = require('playwright');
   await page.addInitScript(() => { if (!sessionStorage.getItem('i')) { sessionStorage.setItem('i', 1); localStorage.clear(); } });
   await page.goto(BASE + '/?demo');
   await page.waitForSelector('.hero');
-  check('font is Geologica', await page.evaluate(async () => { await document.fonts.ready; return document.fonts.check('600 16px Geologica'); }));
+  check('fonts are Funnel Sans + Funnel Display', await page.evaluate(async () => { await document.fonts.load('600 16px "Funnel Sans"'); await document.fonts.load('800 30px "Funnel Display"'); return [...document.fonts].some(f => f.family.includes('Funnel Sans') && f.status === 'loaded') && [...document.fonts].some(f => f.family.includes('Funnel Display') && f.status === 'loaded'); }));
   check('4 tabs incl. Discover', await page.locator('.tabbar button').count() === 4 && await page.locator('[data-tab=discover]').count() === 1);
   check('hero shows most recent player', /Jon is playing/.test(await page.locator('.hero').innerText()));
   check('no cartridges left', await page.locator('.cart').count() === 0);

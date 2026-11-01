@@ -220,6 +220,63 @@
   function gameTint(g) { const c = catOf(g); return tintFrom(c && c.cover_color, g.igdb_id || g.id || g.title); }
   function rowTint(r) { const c = catRow(r.igdb_id); return tintFrom((c && c.cover_color) || r.cover_color, r.igdb_id || r.name); }
 
+  // ---------------- Case Wall: the wall takes a deep shade of the game you're playing ----------------
+  const WALL_DEFAULT = [352, 0.38];
+  function hueSat(color, key) {
+    const p = hexToHsl(color);
+    if (p) return [p[0], p[1] < 0.1 ? 0.06 : Math.min(0.5, Math.max(0.22, p[1] * 0.75))];
+    return [hash(String(key)) % 360, 0.25];
+  }
+  function gameHueSat(g) { const c = catOf(g); return hueSat(c && c.cover_color, g.igdb_id || g.id || g.title); }
+  function wallVars(h, s) {
+    return {
+      "--bg": hsl(h, s, 0.13), "--wall-2": hsl(h, s, 0.085), "--lip": hsl(h, s * 0.9, 0.22),
+      "--s1": hsl(h, s, 0.1), "--s2": hsl(h, s * 0.85, 0.19), "--s3": hsl(h, s * 0.85, 0.25), "--sheet": hsl(h, s, 0.11),
+      "--ink": hsl(h, 0.5, 0.94), "--body": hsl(h, 0.32, 0.87), "--ink-2": hsl(h, 0.26, 0.79), "--ink-3": hsl(h, 0.16, 0.64),
+      "--on-ink": hsl(h, s, 0.12), "--sticker": hsl(h, 0.5, 0.94), "--sticker-ink": hsl(h, s, 0.12),
+    };
+  }
+  // The game page's manual: light paper, faintly tinted by the game.
+  function manualVars(h, s) {
+    const ps = Math.min(0.3, s);
+    return {
+      "--bg": hsl(h, ps, 0.955), "--s1": hsl(h, ps, 0.915), "--s2": hsl(h, ps * 0.8, 0.89), "--s3": hsl(h, ps * 0.8, 0.83),
+      "--sheet": hsl(h, ps, 0.955), "--line": "rgba(50, 25, 25, 0.12)", "--line-2": "rgba(50, 25, 25, 0.24)",
+      "--ink": hsl(h, 0.45, 0.13), "--body": hsl(h, 0.22, 0.22), "--ink-2": hsl(h, 0.14, 0.32), "--ink-3": hsl(h, 0.1, 0.41),
+      "--on-ink": hsl(h, ps, 0.965), "--star": "#D2930F", "--danger": "#B3302A",
+    };
+  }
+  const styleVars = (v) => Object.entries(v).map(([k, val]) => `${k}:${val}`).join(";");
+  let wallKey = "";
+  function applyWall() {
+    const mine = S.entries.filter((e) => e.user_id === S.me && idx.g[e.game_id]).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    const pick = mine.find((e) => e.status === "playing") || mine[0];
+    const hs = pick ? gameHueSat(idx.g[pick.game_id]) : WALL_DEFAULT;
+    const key = hs.map((x) => x.toFixed(2)).join(",");
+    if (key === wallKey) return;
+    wallKey = key;
+    const v = wallVars(hs[0], hs[1]);
+    const r = document.documentElement.style;
+    Object.entries(v).forEach(([k, val]) => r.setProperty(k, val));
+    const meta = $('meta[name="theme-color"]'); if (meta) meta.content = v["--bg"];
+  }
+
+  // Stickers sit in one spot on the case and say the status at a glance.
+  function stickerFor(g, e) {
+    if (!e) return "";
+    if (e.status === "finished") return `<span class="stk done">Completed</span>`;
+    if (e.status === "dropped") return `<span class="stk traded">Traded in</span>`;
+    if (e.status === "paused") return `<span class="stk paused">Paused</span>`;
+    if (e.status === "want") { const rel = releaseInfo(catOf(g)); if (rel && rel.upcoming) return `<span class="stk">Out ${esc(rel.short)}</span>`; }
+    return "";
+  }
+  const SCUFFS = [
+    "left:3cqw;top:1.5cqw;width:11cqw;transform:rotate(-38deg)", "right:1.5cqw;bottom:7cqw;width:9cqw;transform:rotate(32deg)",
+    "right:0.4cqw;top:24cqw;width:6cqw;transform:rotate(82deg)", "left:1cqw;bottom:1.5cqw;width:9cqw;transform:rotate(44deg)",
+    "right:22cqw;bottom:0.6cqw;width:8cqw", "left:0.4cqw;top:44cqw;width:6cqw;transform:rotate(90deg)",
+  ];
+  function wearOf(hours) { return hours >= 200 ? 3 : hours >= 100 ? 2 : hours >= 50 ? 1 : 0; }
+
   // ---------------- Building blocks ----------------
   function starSvg(cls) { return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${STAR_PATH}" fill="currentColor"/></svg>`; }
   function star(fill) {
@@ -236,14 +293,14 @@
     const letter = p ? (p.display_name.trim()[0] || "?").toUpperCase() : "?";
     return `<span class="avatar ${cls}" style="--c:${col}" aria-hidden="true">${esc(letter)}</span>`;
   }
-  // Cover tile: the box art when we have it, otherwise a tinted tile with the title.
-  function coverHTML({ title, url, tint, cls = "", badge = "" }) {
-    if (badge) cls += " has-badge";
-    return `<span class="cv ${cls}" style="--t:${tint.tile};--tm:${tint.soft}" aria-hidden="true">${url
-      ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span class="cv-t">${esc(title)}</span>${badge ? `<span class="badge">${esc(badge)}</span>` : ""}</span>`;
+  // A game case: the box art as its cover insert when we have it, otherwise a tinted insert with the title.
+  function coverHTML({ title, url, tint, cls = "", sticker = "", sealed = false, wear = 0 }) {
+    const scuffs = SCUFFS.slice(0, wear * 2).map((st) => `<i class="scuff" style="${st}"></i>`).join("");
+    return `<span class="cv ${cls}" style="--t:${tint.tile};--tm:${tint.soft}" aria-hidden="true"><span class="art">${url
+      ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span class="cv-t">${esc(title)}</span></span>${sealed ? `<span class="wrap"></span>` : ""}${scuffs}${sticker}</span>`;
   }
   function gameCover(g, opts = {}) {
-    return coverHTML({ title: g.title, url: coverUrl(g, opts.size || "cover_big"), tint: gameTint(g), cls: opts.cls, badge: opts.badge });
+    return coverHTML({ title: g.title, url: coverUrl(g, opts.size || "cover_big"), tint: gameTint(g), cls: opts.cls, sticker: opts.sticker, sealed: opts.sealed, wear: opts.wear });
   }
   function rowCover(r, opts = {}) {
     const c = catRow(r.igdb_id);
@@ -561,6 +618,7 @@
   ];
   function renderMain() {
     const keepScroll = window.scrollY;
+    applyWall();
     const body = S.tab === "shelf" ? shelfView() : S.tab === "friends" ? friendsView() : S.tab === "discover" ? discoverView() : feedView();
     root().innerHTML = `
       <div class="ptr" id="ptr" aria-hidden="true"><span>Pull to refresh</span></div>
@@ -706,7 +764,16 @@
     else if (!games.length && q) grid = `<div class="empty"><h3>No games match "${esc(S.search)}"</h3><p>Check the spelling, or add it to the shelf.</p><button class="btn" data-act="add-game" data-title="${esc(S.search)}">Add ${esc(S.search)}</button></div>`;
     else if (!games.length && mine && S.status !== "all") grid = `<div class="empty"><h3>Nothing marked ${esc(STATUS_LABEL[S.status].toLowerCase())}</h3><p>Open a game and set its status to see it here.</p></div>`;
     else if (!games.length && mine) grid = emptyState("Your shelf is empty", "Log a game from Everyone's shelf, or add a new one.", "Add a game");
-    else grid = `<div class="grid">${games.map((g) => shelfTile(g, mine)).join("")}</div>`;
+    else {
+      const cols = window.innerWidth >= 560 ? 4 : 3;
+      let rows = "";
+      for (let i = 0; i < games.length; i += cols) {
+        const row = games.slice(i, i + cols);
+        rows += `<div class="shelf-row"><div class="cases">${row.map((g) => caseTile(g)).join("")}</div>
+          <div class="ledge"><div class="labels">${row.map((g) => caseLabel(g, mine)).join("")}</div></div></div>`;
+      }
+      grid = `<div class="wall" style="--cols:${cols}">${rows}</div>`;
+    }
     return `<div class="toolbar"><span class="subtle small">${games.length} ${games.length === 1 ? "game" : "games"}</span>
         <label><span class="sr-only">Sort by</span><select class="sort" name="sort">
           <option value="recent" ${S.sort === "recent" ? "selected" : ""}>Recently active</option>
@@ -723,7 +790,9 @@
           ${[{ id: "all", label: "All" }, ...STATUSES].map((s) => `<button class="chip" data-act="status-filter" data-status="${s.id}" aria-pressed="${S.status === s.id}">${s.label}<b>${counts[s.id] || 0}</b></button>`).join("")}
         </div>`
       : "";
+    const canHold = mine && S.entries.some((e) => e.user_id === S.me && e.status === "playing");
     return topbar("Shelf") + `
+      ${canHold ? `<p class="hint">Hold a case to add an hour.</p>` : ""}
       <div class="seg" role="group" aria-label="Whose games">
         <button data-act="scope" data-scope="mine" aria-pressed="${mine}">My games</button>
         <button data-act="scope" data-scope="all" aria-pressed="${!mine}">Everyone's</button>
@@ -733,20 +802,28 @@
       <div id="shelf-results">${shelfResults()}</div>`;
   }
 
-  function shelfTile(g, mine) {
+  // A case on the wall. Playing games stand forward; hold any logged case (not sealed) to add an hour.
+  function caseTile(g) {
     const me = myEntry(g.id);
-    const sc = groupScore(g.id);
-    const badge = me && !(mine && S.status !== "all") ? STATUS_LABEL[me.status] : "";
-    const meta = sc
-      ? `${stars(sc.avg, 11)}<span>${fmtRating(round1(sc.avg))}</span>`
-      : `<span>${(idx.byGame[g.id] || []).length ? "No ratings yet" : "Nobody's logged it"}</span>`;
-    const quick = mine && me && me.status === "playing"
-      ? `<button type="button" class="quick" data-act="quick-hours" data-id="${g.id}" data-delta="1" aria-label="Add 1 hour to ${esc(g.title)}">+1h</button>` : "";
-    return `<div class="tile-wrap"><button class="tile" data-act="open-game" data-id="${g.id}">
-      ${gameCover(g, { badge })}
-      <div class="tile-title">${esc(g.title)}</div>
-      <div class="tile-meta">${meta}</div>
-    </button>${quick}</div>`;
+    const out = me && me.status === "playing";
+    const canHold = me && me.status !== "want";
+    const label = [g.title, me && STATUS_LABEL[me.status], me && me.hours ? fmtHours(me.hours) : ""].filter(Boolean).join(", ");
+    return `<button class="case-btn${out ? " out" : ""}" data-act="open-game" data-id="${g.id}"${canHold ? ' data-hold="1"' : ""} aria-label="${esc(label)}">
+      ${gameCover(g, { sticker: stickerFor(g, me), sealed: !!me && me.status === "want", wear: me ? wearOf(me.hours || 0) : 0 })}</button>`;
+  }
+  // The shelf-edge label under each case: title, then hours and rating (mine) or the group's score (everyone's).
+  function caseLabel(g, mine) {
+    const me = myEntry(g.id);
+    let line;
+    if (mine && me) {
+      if (me.status === "want") { const rel = releaseInfo(catOf(g)); line = `<b>Sealed</b>${rel && rel.upcoming ? esc(rel.short) : ""}`; }
+      else line = `<b>${me.hours ? fmtHours(me.hours) : "0h"}</b>${me.rating != null ? fmtRating(me.rating) + " stars" : esc(STATUS_LABEL[me.status])}`;
+    } else {
+      const sc = groupScore(g.id);
+      const n = (idx.byGame[g.id] || []).length;
+      line = sc ? `<b>${fmtRating(round1(sc.avg))}</b>${sc.n} rated` : `${n} logged`;
+    }
+    return `<div class="lbl"><span class="t">${esc(g.title)}</span>${line}</div>`;
   }
 
   // ---------------- Discover (S33 trending, S34 calendar) ----------------
@@ -992,13 +1069,28 @@
         ${inner}
       </div></div>`;
   }
-  function pageFrame(label, head, body) {
-    return `<div class="page" role="dialog" aria-modal="true" aria-label="${esc(label)}"><div class="page-inner">${head}<div class="g-body">${body}</div></div></div>`;
+  // A game page: the header is the opened case (disc in the tray), the body is the manual, a light paper sheet.
+  function pageFrame(label, head, body, { tint, hs }) {
+    const opening = S.sheet && !S.sheet.opened;
+    if (S.sheet) S.sheet.opened = true;
+    return `<div class="page${opening ? " opening" : ""}" role="dialog" aria-modal="true" aria-label="${esc(label)}" style="--hb:${tint.bg};--hm:${tint.soft}">
+      <div class="page-inner">${head}<div class="booklet" style="${styleVars(manualVars(hs[0], hs[1]))}"><div class="g-body">${body}</div></div></div></div>`;
   }
-  function pageHead({ title, cover, tint, meta, chips, right }) {
-    return `<header class="g-head" style="--hb:${tint.bg};--hm:${tint.soft}">
+  function caseHead({ url, tint, title }) {
+    const img = url ? `<img src="${esc(url)}" alt="" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
+    const name = `<span class="cv-t">${esc(title)}</span>`;
+    return `<div class="open-case" aria-hidden="true" style="--t:${tint.tile};--tm:${tint.soft}">
+      <div class="tray"><div class="disc"><div class="label">${img || name}</div><span class="hub"></span></div></div>
+      <div class="lid">
+        <div class="face back"><span class="clip" style="top:9%"></span><span class="clip" style="bottom:9%"></span><div class="ins">${img}</div></div>
+        <div class="face front"><div class="ins">${img || name}</div></div>
+      </div>
+    </div>`;
+  }
+  function pageHead({ title, art, meta, chips, right }) {
+    return `<header class="g-head">
       <div class="g-nav"><button class="btn round glass" data-act="close" aria-label="Back">${ICON.back}</button>${right || ""}</div>
-      ${cover}
+      ${caseHead(art)}
       <div><h1>${esc(title)}</h1>${meta ? `<div class="g-meta">${esc(meta)}</div>` : ""}</div>
       <div id="chips">${chips}</div>
     </header>`;
@@ -1016,6 +1108,8 @@
     else if (sh.kind === "share") html = shareSheet(sh.id);
     layer().innerHTML = html;
     document.body.style.overflow = "hidden";
+    const pg = $(".page.opening"); // the case-opening plays once; its end state is the page's resting state
+    if (pg) setTimeout(() => pg.classList.remove("opening"), 900);
     const first = $("#layer [autofocus]");
     if (first && !matchMedia("(pointer: coarse)").matches) first.focus();
   }
@@ -1080,7 +1174,7 @@
     const meta = [year, c && c.genres && c.genres[0], plats].filter(Boolean).join(", ");
     const canShare = mine && (mine.rating != null || mine.review || mine.status === "finished");
     const head = pageHead({
-      title: g.title, cover: gameCover(g, { size: "cover_big_2x" }), tint: gameTint(g), meta,
+      title: g.title, art: { url: coverUrl(g, "cover_big_2x"), tint: gameTint(g), title: g.title }, meta,
       chips: scoreChips(c, groupScore(id)),
       right: canShare ? `<button class="btn round glass" data-act="share-open" data-id="${id}" aria-label="Share my review">${ICON.share}</button>` : "",
     });
@@ -1120,7 +1214,7 @@
         </div>
         ${mine ? `<button type="button" class="btn danger block" data-act="remove-entry" data-id="${mine.id}">Remove from my shelf</button>` : ""}
       </div>`;
-    return pageFrame(g.title, head, body);
+    return pageFrame(g.title, head, body, { tint: gameTint(g), hs: gameHueSat(g) });
   }
 
   // A game from Discover or picks that isn't on the shelf yet.
@@ -1132,9 +1226,10 @@
     const img = r.cover_image_id;
     const year = full && full.first_release_date ? full.first_release_date.slice(0, 4) : r.year;
     const meta = [year, full && full.genres && full.genres[0], (r.platforms || []).slice(0, 3).join(", ")].filter(Boolean).join(", ");
+    const tint = tintFrom(full && full.cover_color, id);
     const head = pageHead({
-      title: name, tint: tintFrom(full && full.cover_color, id), meta,
-      cover: coverHTML({ title: name, url: img ? IGDB_IMG(img, "cover_big_2x") : "", tint: tintFrom(full && full.cover_color, id) }),
+      title: name, meta,
+      art: { url: img ? IGDB_IMG(img, "cover_big_2x") : "", tint, title: name },
       chips: full ? scoreChips(full, null) : r.critic_score != null ? scoreChips({ critic_score: r.critic_score }, null) : "",
     });
     const rel = releaseInfo(full);
@@ -1151,7 +1246,7 @@
         <p class="error" role="alert">${sh.error ? esc(sh.error) : ""}</p>
       </section>
       ${full ? aboutHTML(full) : sh.error ? "" : `<p class="subtle small" role="status">Loading details…</p>`}`;
-    return pageFrame(name, head, body);
+    return pageFrame(name, head, body, { tint, hs: hueSat(full && full.cover_color, id) });
   }
   async function loadExt(sh) {
     const id = sh.igdb;
@@ -1472,7 +1567,7 @@
     const W = 1080, H = 1350;
     const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
     const ctx = cv.getContext("2d");
-    const font = (w, px) => `${w} ${px}px Geologica, system-ui, -apple-system, sans-serif`;
+    const font = (w, px) => `${w} ${px}px "Funnel Display", system-ui, -apple-system, sans-serif`;
     try { await Promise.all([document.fonts.load(font(700, 72)), document.fonts.load(font(500, 34)), document.fonts.load(font(400, 36))]); } catch (_) {}
     const t = gameTint(g);
 
@@ -1569,12 +1664,15 @@
     });
   }
   let toastTimer;
-  function toast(msg) {
+  // action: optional { label, fn } button in the toast (e.g. Undo).
+  function toast(msg, action) {
     let t = $(".toast");
-    if (!t) { t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); document.body.appendChild(t); }
-    t.textContent = msg;
+    if (!t) { t = document.createElement("div"); t.setAttribute("role", "status"); document.body.appendChild(t); }
+    t.className = "toast" + (action ? "" : " plain");
+    t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button type="button">${esc(action.label)}</button>` : ""}`;
+    if (action) t.querySelector("button").addEventListener("click", () => { clearTimeout(toastTimer); t.remove(); action.fn(); });
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.remove(), 2400);
+    toastTimer = setTimeout(() => t.remove(), action ? 4500 : 2400);
   }
 
   async function busy(btn, fn) {
@@ -1872,7 +1970,8 @@
   }
 
   // S17: quick session buttons
-  async function quickHours(gameId, delta) {
+  // opts.undo: offer Undo in the toast. opts.undone: this call is the undo.
+  async function quickHours(gameId, delta, opts = {}) {
     const e = myEntry(gameId);
     if (!e || !delta) return;
     const before = e.hours;
@@ -1881,7 +1980,9 @@
     reindex(); renderMain(); refreshOpenSheet();
     if (S.draft && S.draft.gameId === gameId) { S.draft.hours = e.hours; const f = $('form[data-form="entry"]'); if (f && f.hours) f.hours.value = e.hours; }
     const g = idx.g[gameId];
-    toast(`+${delta < 1 ? "30m" : delta + "h"} on ${g ? g.title : "this game"} (${fmtHours(e.hours)} total)`);
+    if (opts.undone) toast(`Undone. ${fmtHours(e.hours) || "0h"} on ${g ? g.title : "this game"}`);
+    else toast(`+${delta < 1 ? "30m" : delta + "h"} on ${g ? g.title : "this game"} (${fmtHours(e.hours)} total)`,
+      opts.undo ? { label: "Undo", fn: () => quickHours(gameId, -delta, { undone: true }) } : undefined);
     try {
       await queueFor(gameId, async () => {
         const live = myEntry(gameId);
@@ -2024,6 +2125,7 @@
 
   // ---------------- Wiring ----------------
   document.addEventListener("click", (ev) => {
+    if (suppressClick && ev.target.closest(".case-btn")) { suppressClick = false; ev.preventDefault(); return; }
     const el = ev.target.closest("[data-act]");
     if (!el) return;
     const fn = actions[el.dataset.act];
@@ -2074,6 +2176,35 @@
     if (swReg) swReg.update().catch(() => {});
   });
   window.addEventListener("pagehide", () => { if (S.me) lsSet("sp-seen", new Date().toISOString()); });
+
+  // ---------------- Hold a case on the Shelf to add an hour ----------------
+  let hold = null, suppressClick = false;
+  document.addEventListener("pointerdown", (ev) => {
+    const b = ev.target.closest(".case-btn[data-hold]");
+    if (!b || (ev.pointerType === "mouse" && ev.button !== 0)) return;
+    endHold();
+    const id = b.dataset.id;
+    b.classList.add("holding");
+    hold = { b, x: ev.clientX, y: ev.clientY, t: setTimeout(() => {
+      hold.fired = true;
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 700);
+      if (navigator.vibrate) navigator.vibrate(12);
+      quickHours(id, 1, { undo: true });
+      const nb = $(`.case-btn[data-id="${id}"]`); // the wall re-rendered: bump the new case
+      if (nb) { nb.classList.add("bump"); setTimeout(() => nb.classList.remove("bump"), 500); }
+    }, 450) };
+  });
+  function endHold() {
+    if (!hold) return;
+    clearTimeout(hold.t);
+    hold.b.classList.remove("holding");
+    hold = null;
+  }
+  document.addEventListener("pointermove", (ev) => { if (hold && Math.hypot(ev.clientX - hold.x, ev.clientY - hold.y) > 10) endHold(); });
+  document.addEventListener("pointerup", endHold);
+  document.addEventListener("pointercancel", endHold);
+  document.addEventListener("contextmenu", (ev) => { if (ev.target.closest(".case-btn")) ev.preventDefault(); });
 
   // ---------------- S19: gestures ----------------
   // Swipe a sheet down to close it; swipe a game page right from the left edge to go back; pull the main screen to refresh.
