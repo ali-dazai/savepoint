@@ -1,0 +1,82 @@
+// Run with: npm test  (tests/run.js starts a local server and sets BASE)
+const path = require('node:path');
+const BASE = process.env.BASE || 'http://localhost:8765';
+const { chromium, devices } = require('playwright');
+const fs = require('node:fs');
+const out = path.join(__dirname, '..', '..', 'test-results', 'picks-share'); fs.mkdirSync(out, { recursive: true });
+(async () => {
+  const browser = await chromium.launch();
+  const scheme = 'dark';
+  const ctx = await browser.newContext({ ...devices['iPhone 13'], colorScheme: scheme, acceptDownloads: true });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  page.on('console', m => { if (m.type() === 'error' && !/images\.igdb|ERR_|Failed to load resource/.test(m.text())) errors.push('console: ' + m.text()); });
+  const shot = async (n) => { await page.waitForTimeout(350); await page.screenshot({ path: `${out}/${n}-${scheme}.png` }); };
+  const check = (l, c) => console.log((c ? 'PASS ' : 'FAIL ') + l);
+  await page.addInitScript(() => { if (!sessionStorage.getItem('i')) { sessionStorage.setItem('i', 1); localStorage.clear(); } });
+  await page.goto(BASE + '/?demo');
+  await page.waitForSelector('.feed-item');
+  await page.waitForSelector('.rail .rail-item');
+  await page.waitForTimeout(500);
+  const picks = await page.locator('.rail .rail-item').allInnerTexts();
+  console.log('picks:', JSON.stringify(picks.map(t => t.replace(/\n+/g, ' | '))));
+  check('S26 friend pick (Celeste via Priya)', picks.some(t => /Celeste/.test(t) && /Priya rated it 5/.test(t)));
+  check('S26 similar picks from Elden Ring', picks.some(t => /Dark Souls III/.test(t) && /Like Elden Ring/.test(t)) && picks.some(t => /Sekiro/.test(t)));
+  check('S26 logged games never picked', !picks.some(t => /Elden Ring \|/.test(t) || /Balatro/.test(t)));
+  await page.locator('.rail').scrollIntoViewIfNeeded();
+  await shot('01-feed-picks');
+  // external pick -> add
+  await page.locator('.rail-item', { hasText: 'Dark Souls III' }).click();
+  await page.waitForSelector('.page [data-act=ext-add][data-status=want]');
+  await page.waitForSelector('.page .about');
+  const ext = await page.locator('.page').innerText();
+  check('S26 external pick opens a game page with why + details', /Like Elden Ring/.test(ext) && /Critics/.test(ext) && /As fires fade/.test(ext));
+  await shot('02-pick-ext');
+  await page.click('[data-act=ext-add][data-status=want]');
+  await page.waitForSelector('.page form[data-form=entry]');
+  check('S26 added Dark Souls III as want', /Dark Souls III/.test(await page.locator('.page .g-head').innerText()) && await page.locator('[data-act=pick-status][data-status=want][aria-pressed=true]').count() === 1);
+  await page.click('[data-act=close]');
+  await page.waitForTimeout(300);
+  const picks2 = await page.locator('.rail .rail-item').allInnerTexts();
+  check('S26 added game left the picks', !picks2.some(t => /Dark Souls III/.test(t)));
+  // friend pick opens game with why line
+  await page.locator('.rail-item', { hasText: 'Celeste' }).click();
+  check('S26 why line on game sheet', /Picked for you: Priya rated it 5/.test(await page.locator('.page').innerText()));
+  await shot('03-why');
+  await page.click('[data-act=close]');
+  // friends tab match
+  await page.click('[data-tab=friends]');
+  const fr = await page.locator('.friend').allInnerTexts();
+  console.log('friends:', JSON.stringify(fr.map(t => t.replace(/\n+/g, ' | '))));
+  check('S26 Jon 89% match', fr.some(t => /Jon/.test(t) && /89% match/.test(t)));
+  check('S26 Priya 78% match', fr.some(t => /Priya/.test(t) && /78% match/.test(t)));
+  await shot('04-friends');
+  await page.locator('.friend', { hasText: 'Priya' }).click();
+  const tp = await page.locator('.taste').innerText();
+  check('S26 taste panel: ' + tp.replace(/\n+/g, ' | '), /78%/.test(tp) && /You both loved Elden Ring/.test(tp));
+  await shot('05-friend-taste');
+  await page.click('[data-act=close]');
+  // share card
+  await page.click('[data-tab=shelf]');
+  await page.click('[data-act=scope][data-scope=mine]');
+  await page.fill('input[name=q]', 'elden');
+  await page.click('.tile');
+  await page.click('.g-nav [data-act=share-open]');
+  await page.waitForSelector('.share-preview img', { timeout: 15000 });
+  const dims = await page.locator('.share-preview img').evaluate(i => new Promise(r => i.complete ? r([i.naturalWidth, i.naturalHeight]) : (i.onload = () => r([i.naturalWidth, i.naturalHeight]))));
+  check('S27 image is 1080x1350: ' + dims, dims[0] === 1080 && dims[1] === 1350);
+  await shot('06-share');
+  // save full card for review
+  const dataUrl = await page.locator('.share-preview img').evaluate(async (i) => { const b = await (await fetch(i.src)).blob(); return await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); }); });
+  fs.writeFileSync(`${out}/card-${scheme}.png`, Buffer.from(dataUrl.split(',')[1], 'base64'));
+  await page.uncheck('input[name=share-include]');
+  await page.waitForTimeout(800);
+  const dl = page.waitForEvent('download', { timeout: 5000 }).catch(() => null);
+  await page.click('[data-act=share-go]');
+  const d = await dl;
+  check('S27 save fallback downloads PNG: ' + (d && d.suggestedFilename()), !!d && /\.png$/.test(d.suggestedFilename()));
+  if (d) await d.saveAs(`${out}/card-noreview-${scheme}.png`);
+  console.log('errors:', JSON.stringify(errors));
+  await browser.close();
+})();

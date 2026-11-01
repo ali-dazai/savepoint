@@ -1,0 +1,22 @@
+# Once a day: ask the live server function whether IGDB, Steam reviews, the Steam chart and the Discover lists are healthy.
+# If anything is off this run fails and GitHub emails the repo owner. Uses only the public "health" action (no secrets).
+name: Daily live check
+on:
+  schedule:
+    - cron: "0 3 * * *"   # 03:00 UTC = 07:00 Dubai, after the 02:15 UTC Discover job
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call the health check
+        run: |
+          body=$(curl -sS --max-time 60 -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"action":"health"}' \
+            https://evkzdabyyxbtchqtebfr.supabase.co/functions/v1/catalog)
+          echo "$body"
+          echo "$body" | jq -e '.ok == true' > /dev/null || { echo "::error::Live check failed: $body"; exit 1; }

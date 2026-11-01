@@ -1,0 +1,13 @@
+{
+  "name": "savepoint",
+  "private": true,
+  "description": "Save Point: a shared game log. The site itself has no build step; these are only the test and lint tools.",
+  "scripts": {
+    "test": "node tests/run.js",
+    "lint": "biome lint"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.4",
+    "playwright": "1.63.0"
+  }
+}
