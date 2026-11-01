@@ -56,6 +56,7 @@ const out = path.join(__dirname, '..', '..', 'test-results', 'regression'); fs.m
   await page.locator(`.case-btn[data-id="${heldId}"]`).click();
   await page.waitForSelector('.page .open-case');
   check('Case Wall: game page opens the case (lid, disc, booklet)', await page.locator('.page.opening .lid').count() === 1 && await page.locator('.open-case .disc').count() === 1 && await page.locator('.booklet form[data-form=entry]').count() === 1);
+  check('empty stars are visible on the light booklet', await page.evaluate(() => { const e = document.querySelector('.booklet .st-empty'); const c = getComputedStyle(e).color.match(/[\d.]+/g).map(Number); return c[0] < 120 && (c[3] === undefined || c[3] >= 0.15); }));
   await page.waitForTimeout(1000);
   await page.click('[data-act=pick-status][data-status=paused]');
   check('Case Wall: re-render does not replay the opening', await page.locator('.page.opening').count() === 0);

@@ -1,6 +1,6 @@
 // Save Point service worker: keeps the app shell available so it opens fast
 // (and opens at all when the connection is bad). Data always comes live from Supabase.
-const VERSION = "savepoint-v7";
+const VERSION = "savepoint-v8";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./app.js", "./api.js", "./config.js",
   "./vendor/supabase.js", "./manifest.webmanifest",

@@ -243,7 +243,7 @@
       "--bg": hsl(h, ps, 0.955), "--s1": hsl(h, ps, 0.915), "--s2": hsl(h, ps * 0.8, 0.89), "--s3": hsl(h, ps * 0.8, 0.83),
       "--sheet": hsl(h, ps, 0.955), "--line": "rgba(50, 25, 25, 0.12)", "--line-2": "rgba(50, 25, 25, 0.24)",
       "--ink": hsl(h, 0.45, 0.13), "--body": hsl(h, 0.22, 0.22), "--ink-2": hsl(h, 0.14, 0.32), "--ink-3": hsl(h, 0.1, 0.41),
-      "--on-ink": hsl(h, ps, 0.965), "--star": "#D2930F", "--danger": "#B3302A",
+      "--on-ink": hsl(h, ps, 0.965), "--star": "#D2930F", "--star-empty": "rgba(60, 35, 30, 0.2)", "--danger": "#B3302A",
     };
   }
   const styleVars = (v) => Object.entries(v).map(([k, val]) => `${k}:${val}`).join(";");
@@ -1140,7 +1140,7 @@
     if (sc) out.push(chip(fmtRating(round1(sc.avg)), sc.n === 1 ? "1 friend" : `${sc.n} friends`));
     if (c && c.critic_score != null) out.push(chip(String(Math.round(c.critic_score)), "Critics"));
     if (c && c.steam_pct != null && c.steam_total) out.push(chip(c.steam_pct + "%", "Steam" + (c.steam_desc ? ", " + c.steam_desc : "")));
-    else if (c && S.steamLoading.has(c.igdb_id)) out.push(`<div class="score-chip loading" role="status"><b>…</b><span>Steam</span></div>`);
+    else if (c && S.steamLoading.has(c.igdb_id)) out.push(`<div class="score-chip pending" role="status"><b>…</b><span>Steam</span></div>`);
     const rel = releaseInfo(c);
     if (rel && rel.upcoming) out.push(chip(rel.short, rel.precise && daysUntil(rel.date) <= 60 ? `Out in ${daysUntil(rel.date)} ${daysUntil(rel.date) === 1 ? "day" : "days"}` : "Release"));
     let html = out.length ? `<div class="scores">${out.join("")}</div>` : "";

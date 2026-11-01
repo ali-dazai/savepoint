@@ -84,6 +84,7 @@ const { chromium, devices } = require('playwright');
   check('critic score 95 shown', /\b95\b/.test(await page.locator('.page').innerText()));
   await page.waitForSelector('.score-chip:has-text("Steam")');
   check('S35 Steam chip from steam action', /93%/.test(await page.locator('#chips').innerText()) && /41k playing on Steam/.test(await page.locator('#chips').innerText()));
+  check('loading Steam chip stays chip-sized (no full-screen stretch)', await page.evaluate(() => { const box = document.querySelector('#chips .scores'); const el = document.createElement('div'); el.className = 'score-chip pending'; el.innerHTML = '<b>…</b><span>Steam</span>'; box.appendChild(el); const h = el.getBoundingClientRect().height; el.remove(); return h < 90; }));
   await page.waitForTimeout(400);
   check('refresh action called for missing cover colour', JSON.stringify(db.refreshed) === '[119133]');
   // quick hours via RPC
