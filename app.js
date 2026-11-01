@@ -772,17 +772,19 @@
   }
   function trendingHTML(d) {
     const items = d.trending || [];
-    const note = d.has_history
-      ? "What's taking off this week on Steam and Twitch."
-      : "What's popular right now. Weekly surges show up once we've tracked a week of numbers.";
+    const note = "From Steam's live most-played chart: new arrivals and fast climbers first, then this year's big games.";
     if (!items.length) return `<p class="nudge">Nothing to show yet. Check back later.</p>`;
     return `<p class="disc-note">${note}</p><ol class="trend">${items.map((r, i) => {
       const shelf = idx.byIgdb[r.igdb_id];
       const line = shelf ? groupLine(shelf.id) : "";
-      const meta = [r.year, (r.platforms || []).slice(0, 3).join(", ")].filter(Boolean).join(" · ");
+      const meta = r.peak
+        ? [`${fmtNum(r.peak)} peak players`, r.steam_pct != null ? `${r.steam_pct}% positive` : ""].filter(Boolean).join(" · ")
+        : [r.year, (r.platforms || []).slice(0, 3).join(", ")].filter(Boolean).join(" · ");
+      const hot = r.hot != null ? r.hot : /^\+/.test(r.reason || "");
+      const reason = String(r.reason || "").replace(/^(New in Steam's top 100) this week$/, "$1");
       return `<li><span class="rank">${i + 1}</span>
         <button class="open" data-act="open-row" data-igdb="${r.igdb_id}">${rowCover(r)}<span class="t-text"><b>${esc(r.name)}</b>
-          <span class="t-meta">${esc(meta)}</span><span class="reason${/^\+/.test(r.reason) ? " hot" : ""}">${esc(r.reason)}</span>${line ? `<span class="t-status">${esc(line)}</span>` : ""}</span></button>
+          <span class="t-meta">${esc(meta)}</span><span class="reason${hot ? " hot" : ""}">${esc(reason)}</span>${line ? `<span class="t-status">${esc(line)}</span>` : ""}</span></button>
         ${wantButton(r.igdb_id, r.name)}</li>`;
     }).join("")}</ol>`;
   }
@@ -1408,7 +1410,7 @@
       if (sh.url) URL.revokeObjectURL(sh.url);
       sh.blob = blob; sh.url = URL.createObjectURL(blob); sh.busy = false;
       if (S.sheet && S.sheet.kind === "share") renderSheet();
-    } catch (e) {
+    } catch {
       sh.busy = false;
       toast("Couldn't make the image. Try again.");
     }
@@ -1940,7 +1942,7 @@
     async entry() {
       syncDraftFromForm();
       const d = S.draft;
-      if (d.hours != null && (!isFinite(d.hours) || d.hours < 0)) throw new Error("Hours should be a number like 12 or 3.5.");
+      if (d.hours != null && (!Number.isFinite(d.hours) || d.hours < 0)) throw new Error("Hours should be a number like 12 or 3.5.");
       if (d.started_at && d.finished_at && d.finished_at < d.started_at) throw new Error("The finish date is before the start date.");
       const mine = myEntry(d.gameId);
       const fields = {

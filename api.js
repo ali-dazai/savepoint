@@ -328,8 +328,15 @@
     async catalogDiscover() {
       await new Promise((r) => setTimeout(r, 250));
       const light = (g) => ({ igdb_id: g.igdb_id, name: g.name, year: g.year || null, cover_image_id: null, platforms: g.platforms, critic_score: g.critic_score ?? null });
-      const reasons = { 9006: "+38% players this week", 9002: "Popular on Steam right now", 9010: "+6% Steam reviews this week", 9005: "Big on Twitch right now", 9007: "Popular on Steam right now", 9009: "Popular on Steam right now" };
-      const trending = Object.keys(reasons).map(Number).map((id) => ({ ...light(DEMO_CATALOG.find((x) => x.igdb_id === id)), reason: reasons[id] }));
+      const rows = [
+        [9006, "New in Steam's top 100 this week", true, 184000, 81],
+        [9002, "Up 23 places on Steam this week", true, 52000, 97],
+        [9010, "+38% players this week", true, 31000, 96],
+        [9005, "#14 most played on Steam", false, 96000, null],
+        [9007, "#22 most played on Steam", false, 71000, 98],
+        [9009, "#41 most played on Steam", false, 24000, 95],
+      ];
+      const trending = rows.map(([id, reason, hot, peak, pct]) => ({ ...light(DEMO_CATALOG.find((x) => x.igdb_id === id)), reason, hot, peak, steam_pct: pct }));
       const upcoming = DEMO_CATALOG.filter((g) => g.rel != null || g.human).map((g) => {
         const date = g.rel != null ? dayFromNow(g.rel) : null;
         return { ...light(g), year: date ? Number(date.slice(0, 4)) : null, date, human: date ? humanDay(date) : g.human, hypes: g.hypes || 0, wish_rank: null };
