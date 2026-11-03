@@ -22,7 +22,7 @@ export function taste(friendId) {
 }
 
 // Games on the shelf you haven't logged that friends rated highly, weighted by how much your tastes agree.
-function friendPicks() {
+export function friendPicks() {
   const logged = new Set(S.entries.filter((e) => e.user_id === S.me).map((e) => e.game_id));
   const tastes = {};
   S.profiles.forEach((p) => {
@@ -107,7 +107,7 @@ export async function loadSimilar() {
   }
 }
 
-function similarPicks() {
+export function similarPicks() {
   if (!S.similar || !S.similar.games.length) return [];
   const { counts, from } = similarSeeds();
   return S.similar.games

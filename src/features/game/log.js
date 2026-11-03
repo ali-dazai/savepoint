@@ -22,7 +22,7 @@ export function syncDraftFromForm() {
 // ---------------- S18: instant saves ----------------
 export const syncSoon = debounce(() => reload().catch(() => {}), 1500);
 
-function applyLocalEntry(gameId, fields) {
+export function applyLocalEntry(gameId, fields) {
   const now = new Date().toISOString();
   let e = myEntry(gameId);
   const prev = e ? e.status : null;
@@ -49,7 +49,7 @@ function applyLocalEntry(gameId, fields) {
 }
 
 // Runs saves for one game one at a time, so a quick second save never races the first.
-function queueFor(gameId, fn) {
+export function queueFor(gameId, fn) {
   const prev = S.pending[gameId] || Promise.resolve();
   const next = prev.catch(() => {}).then(fn);
   S.pending[gameId] = next;

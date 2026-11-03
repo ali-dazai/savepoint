@@ -27,7 +27,7 @@ function rr(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
 }
-function wrapLines(ctx, text, maxW, maxLines) {
+export function wrapLines(ctx, text, maxW, maxLines) {
   const words = String(text).split(/\s+/).filter(Boolean);
   const lines = [];
   let line = "";

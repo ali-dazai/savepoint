@@ -62,7 +62,7 @@ function trendingHTML(d) {
     .join("")}</ol>`;
 }
 
-function platKinds(list) {
+export function platKinds(list) {
   const k = new Set();
   (list || []).forEach((p) => {
     const s = String(p);
@@ -75,7 +75,7 @@ function platKinds(list) {
 }
 
 // Everything coming out: wishlist games on the shelf (yours and friends'), plus the big upcoming releases.
-function calendarItems(d) {
+export function calendarItems(d) {
   const map = new Map();
   S.games.forEach((g) => {
     const c = catOf(g);
