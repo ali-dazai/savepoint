@@ -1,13 +1,13 @@
 // One delegated listener per event type on document. Clicks go to data-act handlers, submits to data-form handlers.
-import { actions, forms } from "./registry.js";
+import { swallowHoldClick } from "./gestures.js";
 import { reload } from "./reload.js";
+import { actions, forms } from "../core/registry.js";
 import { S } from "../core/state.js";
 import { $, debounce, esc, lsSet, norm } from "../core/util.js";
 import { runCatalogSearch } from "../features/catalog/sheet.js";
 import { buildShare } from "../features/share/sheet.js";
 import { relayoutShelf, shelfResults } from "../features/shelf/view.js";
 import { busy, toast } from "../ui/feedback.js";
-import { swallowHoldClick } from "../ui/gestures.js";
 import { renderMain } from "../ui/screen.js";
 import { goBack } from "../ui/sheet.js";
 import { checkForUpdate } from "../ui/update.js";

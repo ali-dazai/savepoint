@@ -1,6 +1,6 @@
 // Sheets and pages in #layer: open/close/back stack, the frames, and re-rendering without losing scroll.
-import { sheets } from "../app/registry.js";
 import { ICON } from "../core/constants.js";
+import { sheets } from "../core/registry.js";
 import { S } from "../core/state.js";
 import { $, esc } from "../core/util.js";
 import { layer } from "./screen.js";

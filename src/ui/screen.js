@@ -1,6 +1,6 @@
 // The main screen: renders the active tab into #app with the floating tab bar.
-import { tabs } from "../app/registry.js";
 import { ICON } from "../core/constants.js";
+import { tabs } from "../core/registry.js";
 import { S } from "../core/state.js";
 import { $, esc } from "../core/util.js";
 import { markHTML } from "./cover.js";

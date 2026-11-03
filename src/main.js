@@ -2,9 +2,9 @@
 // Adding a feature: write it under src/features/<name>/, then register its tab, sheet kinds, actions and forms here.
 import { shellActions } from "./app/actions.js";
 import { start } from "./app/boot.js";
-import { registerActions, registerForms, registerSheet, registerTab } from "./app/registry.js";
+import { wireGestures } from "./app/gestures.js";
 import { wireEvents } from "./app/wiring.js";
-import { wireGestures } from "./ui/gestures.js";
+import { registerActions, registerForms, registerSheet, registerTab } from "./core/registry.js";
 import { S, idx, myEntry } from "./core/state.js";
 import { $ } from "./core/util.js";
 import { authActions, authForms } from "./features/auth/actions.js";

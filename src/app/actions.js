@@ -1,6 +1,6 @@
 // Actions that belong to the shell itself rather than a feature: tabs, closing sheets, the update banner.
-import { tabs } from "./registry.js";
 import { reload } from "./reload.js";
+import { tabs } from "../core/registry.js";
 import { S } from "../core/state.js";
 import { lsSet } from "../core/util.js";
 import { renderMain } from "../ui/screen.js";

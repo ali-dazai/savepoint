@@ -1,10 +1,10 @@
 // Touch: hold a case to add an hour, swipe a sheet down or a page right to go back, pull to refresh.
-import { reload } from "../app/reload.js";
+import { reload } from "./reload.js";
 import { S } from "../core/state.js";
 import { $ } from "../core/util.js";
 import { quickHours } from "../features/game/log.js";
-import { toast } from "./feedback.js";
-import { goBack } from "./sheet.js";
+import { toast } from "../ui/feedback.js";
+import { goBack } from "../ui/sheet.js";
 
 let hold = null,
   suppressClick = false;
