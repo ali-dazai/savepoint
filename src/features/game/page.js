@@ -37,6 +37,18 @@ export function updatePageChips() {
   if (S.sheet.kind === "game") box.innerHTML = scoreChips(catOf(idx.g[S.sheet.id]), groupScore(S.sheet.id));
   else if (S.sheet.kind === "ext") box.innerHTML = scoreChips(catRow(S.sheet.igdb), null);
 }
+// Outside links are rendered only when they look like what we expect (an https IGDB page, a numeric Steam app id),
+// so a bad or tampered catalogue row can never put a javascript: or data: URL into the page.
+function igdbLink(c) {
+  return /^https:\/\/(www\.)?igdb\.com\//i.test(c.igdb_url || "")
+    ? `. <a href="${esc(c.igdb_url)}" target="_blank" rel="noopener">View on IGDB</a>`
+    : "";
+}
+function steamLink(c) {
+  return /^\d{1,10}$/.test(String(c.steam_appid || ""))
+    ? `. <a href="https://store.steampowered.com/app/${c.steam_appid}" target="_blank" rel="noopener">Steam page</a>`
+    : "";
+}
 export function aboutHTML(c) {
   if (!c) return "";
   return `<section class="about">
@@ -49,7 +61,7 @@ export function aboutHTML(c) {
         : ""
     }
     ${c.summary ? `<p class="summary" id="summary">${esc(c.summary)}</p><button type="button" class="btn ghost more" data-act="more">More</button>` : ""}
-    <p class="credit">Game data from IGDB${c.igdb_url ? `. <a href="${esc(c.igdb_url)}" target="_blank" rel="noopener">View on IGDB</a>` : ""}${c.steam_appid ? `. <a href="https://store.steampowered.com/app/${esc(c.steam_appid)}" target="_blank" rel="noopener">Steam page</a>` : ""}</p>
+    <p class="credit">Game data from IGDB${igdbLink(c)}${steamLink(c)}</p>
   </section>`;
 }
 export function sessionsHTML(mine) {
