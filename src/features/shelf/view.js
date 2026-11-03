@@ -1,7 +1,7 @@
 // Shelf tab: the wall of cases, scope/status/search/sort controls, ledge labels.
 import { ICON, STATUSES, STATUS_LABEL } from "../../core/constants.js";
 import { S, catOf, groupScore, idx, lastActivity, myEntry, releaseInfo } from "../../core/state.js";
-import { esc, fmtHours, fmtRating, norm, round1 } from "../../core/util.js";
+import { $, esc, fmtHours, fmtRating, norm, round1 } from "../../core/util.js";
 import { gameCover, stickerFor, wearOf } from "../../ui/cover.js";
 import { emptyState, topbar } from "../../ui/screen.js";
 
@@ -30,6 +30,16 @@ function shelfGames() {
   return { games, counts, mine, q };
 }
 
+// Cases per ledge: 3 on a phone, 4 from tablet width up.
+function shelfCols() {
+  return window.innerWidth >= 560 ? 4 : 3;
+}
+// Re-lays the wall when the viewport crosses the column breakpoint (rotating the phone, resizing a window).
+export function relayoutShelf() {
+  const wall = $("#shelf-results .wall");
+  if (!wall || wall.style.getPropertyValue("--cols") === String(shelfCols())) return;
+  $("#shelf-results").innerHTML = shelfResults();
+}
 export function shelfResults() {
   const { games, mine, q } = shelfGames();
   let grid;
@@ -42,7 +52,7 @@ export function shelfResults() {
   else if (!games.length && mine)
     grid = emptyState("Your shelf is empty", "Log a game from Everyone's shelf, or add a new one.", "Add a game");
   else {
-    const cols = window.innerWidth >= 560 ? 4 : 3;
+    const cols = shelfCols();
     let rows = "";
     for (let i = 0; i < games.length; i += cols) {
       const row = games.slice(i, i + cols);

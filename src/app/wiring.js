@@ -2,10 +2,10 @@
 import { actions, forms } from "./registry.js";
 import { reload } from "./reload.js";
 import { S } from "../core/state.js";
-import { $, esc, lsSet, norm } from "../core/util.js";
+import { $, debounce, esc, lsSet, norm } from "../core/util.js";
 import { runCatalogSearch } from "../features/catalog/sheet.js";
 import { buildShare } from "../features/share/sheet.js";
-import { shelfResults } from "../features/shelf/view.js";
+import { relayoutShelf, shelfResults } from "../features/shelf/view.js";
 import { busy, toast } from "../ui/feedback.js";
 import { swallowHoldClick } from "../ui/gestures.js";
 import { renderMain } from "../ui/screen.js";
@@ -87,6 +87,7 @@ export function wireEvents() {
     if (S.me && Date.now() - S.lastLoad > 20000) reload().catch(() => {});
     checkForUpdate();
   });
+  window.addEventListener("resize", debounce(relayoutShelf, 150));
   window.addEventListener("pagehide", () => {
     if (S.me) lsSet("sp-seen", new Date().toISOString());
   });

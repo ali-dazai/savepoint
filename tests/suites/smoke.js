@@ -105,6 +105,16 @@ const DEMO_KEY = "savepoint-demo-v4";
   const firstAz = await text(".lbl .t");
   check("shelf: A to Z sort puts an A-title first: " + firstAz, /^[AB]/.test(firstAz));
   await page.selectOption("select[name=sort]", "recent");
+  check("shelf: 3 cases per ledge on a phone", (await page.locator(".wall").getAttribute("style")) === "--cols:3");
+  await page.setViewportSize({ width: 600, height: 844 });
+  await page.waitForTimeout(400);
+  check(
+    "shelf: turning/widening the screen re-lays the wall to 4 per ledge",
+    (await page.locator(".wall").getAttribute("style")) === "--cols:4",
+  );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(400);
+  check("shelf: back to 3 per ledge", (await page.locator(".wall").getAttribute("style")) === "--cols:3");
 
   // 4. Open a game and change the log
   await page.fill("input[name=q]", "astro");
