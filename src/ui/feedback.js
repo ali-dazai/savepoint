@@ -12,12 +12,23 @@ export function confirmDialog({ title, body, ok, danger }) {
       <div class="row"><button class="btn secondary" data-r="0">Cancel</button><button class="btn" data-r="1" style="${danger ? "background:var(--danger);color:#000" : ""}">${esc(ok)}</button></div></div>`;
     document.body.appendChild(el);
     el.querySelector('[data-r="1"]').focus();
+    const done = (answer) => {
+      document.removeEventListener("keydown", onKey);
+      el.remove();
+      resolve(answer);
+    };
+    // Escape cancels, like tapping outside. (The sheet behind must not also close: see the Escape rule in wiring.)
+    const onKey = (ev) => {
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        done(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
     el.addEventListener("click", (ev) => {
       const b = ev.target.closest("[data-r]");
-      if (b || ev.target === el) {
-        el.remove();
-        resolve(!!(b && b.dataset.r === "1"));
-      }
+      if (b || ev.target === el) done(!!(b && b.dataset.r === "1"));
     });
   });
 }

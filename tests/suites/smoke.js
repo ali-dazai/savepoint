@@ -172,6 +172,16 @@ const DEMO_KEY = "savepoint-demo-v4";
   );
   await page.waitForTimeout(950);
   await page.click("[data-act=remove-entry]");
+  await page.waitForSelector(".dialog");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(150);
+  check(
+    "confirm dialog: Escape cancels and keeps the page open",
+    (await page.locator(".dialog").count()) === 0 &&
+      (await page.locator(".page").count()) === 1 &&
+      /Your log/.test(await text(".card-head h2")),
+  );
+  await page.click("[data-act=remove-entry]");
   await confirm();
   check(
     "remove from my shelf: toast + form now says Log it",
