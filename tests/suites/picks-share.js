@@ -1,4 +1,4 @@
-// Run with: npm test  (tests/run.js starts a local server and sets BASE)
+// Run with: npm run test:e2e  (tests/run.js starts a local server and sets BASE)
 import path from "node:path";
 const BASE = process.env.BASE || "http://localhost:8765";
 import { chromium, devices } from "playwright";

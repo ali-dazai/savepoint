@@ -1,6 +1,6 @@
 // Smoke test: the main things a person does in the app, end to end, in demo mode (no network).
 // It is the safety net for refactors: every flow here must keep working byte-for-byte in behaviour.
-// Run with: npm test smoke   (tests/run.js starts a local server and sets BASE)
+// Run with: npm run test:e2e smoke   (tests/run.js starts a local server and sets BASE)
 const BASE = process.env.BASE || "http://localhost:8765";
 import { chromium, devices } from "playwright";
 

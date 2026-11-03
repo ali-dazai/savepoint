@@ -1,5 +1,5 @@
 // Runs every suite in tests/suites against a local copy of the site and fails if any check fails.
-// Usage: npm test   (needs: npm ci && npx playwright install chromium)
+// Usage: npm run test:e2e   (needs: npm ci && npx playwright install chromium)
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
