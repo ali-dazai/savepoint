@@ -1,11 +1,11 @@
 // Runs every suite in tests/suites against a local copy of the site and fails if any check fails.
 // Usage: npm test   (needs: npm ci && npx playwright install chromium)
-const http = require('node:http');
-const fs = require('node:fs');
-const path = require('node:path');
-const { spawn } = require('node:child_process');
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { spawn } from 'node:child_process';
 
-const ROOT = path.join(__dirname, '..');
+const ROOT = path.join(import.meta.dirname, '..');
 const PORT = Number(process.env.PORT || 8765);
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
   '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.woff2': 'font/woff2', '.txt': 'text/plain' };
@@ -46,7 +46,7 @@ function runSuite(file) {
 }
 
 server.listen(PORT, async () => {
-  const dir = path.join(__dirname, 'suites');
+  const dir = path.join(import.meta.dirname, 'suites');
   const only = process.argv.slice(2);
   const files = fs.readdirSync(dir).filter((f) => f.endsWith('.js') && (!only.length || only.some((o) => f.includes(o)))).sort();
   const results = [];

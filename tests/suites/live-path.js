@@ -1,7 +1,7 @@
 // Run with: npm test  (tests/run.js starts a local server and sets BASE)
 const BASE = process.env.BASE || 'http://localhost:8765';
 // Exercises SupabaseApi against a mocked Supabase (auth, REST, RPC, functions).
-const { chromium, devices } = require('playwright');
+import { chromium, devices } from 'playwright';
 (async () => {
   const browser = await chromium.launch();
   const ctx = await browser.newContext({ ...devices['iPhone 13'] });

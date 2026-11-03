@@ -1,9 +1,9 @@
 // Run with: npm test  (tests/run.js starts a local server and sets BASE)
-const path = require('node:path');
+import path from 'node:path';
 const BASE = process.env.BASE || 'http://localhost:8765';
-const { chromium, devices } = require('playwright');
-const fs = require('node:fs');
-const out = path.join(__dirname, '..', '..', 'test-results', 'picks-share'); fs.mkdirSync(out, { recursive: true });
+import { chromium, devices } from 'playwright';
+import fs from 'node:fs';
+const out = path.join(import.meta.dirname, '..', '..', 'test-results', 'picks-share'); fs.mkdirSync(out, { recursive: true });
 (async () => {
   const browser = await chromium.launch();
   const scheme = 'dark';

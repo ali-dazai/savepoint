@@ -2,7 +2,7 @@
 // It is the safety net for refactors: every flow here must keep working byte-for-byte in behaviour.
 // Run with: npm test smoke   (tests/run.js starts a local server and sets BASE)
 const BASE = process.env.BASE || 'http://localhost:8765';
-const { chromium, devices } = require('playwright');
+import { chromium, devices } from 'playwright';
 
 const DEMO_KEY = 'savepoint-demo-v4';
 
