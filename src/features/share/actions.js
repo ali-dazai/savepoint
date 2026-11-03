@@ -30,8 +30,11 @@ export const shareActions = {
       if (e && e.name === "AbortError") return;
     }
     const a = document.createElement("a");
-    a.href = sh.url; a.download = name;
-    document.body.appendChild(a); a.click(); a.remove();
+    a.href = sh.url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
     toast("Image saved");
   },
 };

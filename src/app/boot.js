@@ -9,7 +9,10 @@ import { closeSheet } from "../ui/sheet.js";
 export async function start() {
   renderLoading();
   if (S.api && S.api.unsubscribe) S.api.unsubscribe();
-  S.disc = null; S.ext = {}; S.similar = null; S.me = null;
+  S.disc = null;
+  S.ext = {};
+  S.similar = null;
+  S.me = null;
   const params = new URLSearchParams(location.search);
   const cfg = window.SAVEPOINT_CONFIG || {};
   const configured = cfg.supabaseUrl && cfg.supabaseAnonKey && supabaseLoaded();
@@ -22,7 +25,11 @@ export async function start() {
   if (!configured) return renderNotConfigured();
   S.api = new SupabaseApi(cfg.supabaseUrl.trim(), cfg.supabaseAnonKey.trim());
   S.api.onAuthChange((event) => {
-    if (event === "SIGNED_OUT" && S.me) { S.me = null; closeSheet(); renderAuth("signin"); }
+    if (event === "SIGNED_OUT" && S.me) {
+      S.me = null;
+      closeSheet();
+      renderAuth("signin");
+    }
   });
   afterSignIn();
 }

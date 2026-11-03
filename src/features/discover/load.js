@@ -12,7 +12,10 @@ export async function loadDiscover(force) {
   }
   if (!force && S.disc && S.disc.data && Date.now() - S.disc.at < 3 * 3600e3) return;
   discLoading = true;
-  if (S.disc && S.disc.error) { S.disc = null; if (S.tab === "discover") safeRenderMain(); }
+  if (S.disc && S.disc.error) {
+    S.disc = null;
+    if (S.tab === "discover") safeRenderMain();
+  }
   try {
     const data = await S.api.catalogDiscover();
     S.disc = { data, at: Date.now(), demo: !!S.api.demo };

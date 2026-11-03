@@ -2,7 +2,8 @@
 // screens only ever call methods on S.api, which is either this class or DemoApi (same interface).
 import { catalogError, errMsg } from "./errors.js";
 
-const CATALOG_COLS = "igdb_id, name, cover_image_id, cover_color, first_release_date, release_human, hypes, platforms, genres, summary, critic_score, critic_count, igdb_url, steam_appid, similar_ids, steam_desc, steam_pct, steam_total, steam_players, steam_fetched_at, fetched_at";
+const CATALOG_COLS =
+  "igdb_id, name, cover_image_id, cover_color, first_release_date, release_human, hypes, platforms, genres, summary, critic_score, critic_count, igdb_url, steam_appid, similar_ids, steam_desc, steam_pct, steam_total, steam_players, steam_fetched_at, fetched_at";
 function cleanCatalog(x) {
   return { ...x, critic_score: x.critic_score == null ? null : Number(x.critic_score) };
 }
@@ -31,7 +32,8 @@ export class SupabaseApi {
   }
   async signUp(email, password) {
     const { data, error } = await this.sb.auth.signUp({
-      email, password,
+      email,
+      password,
       options: { emailRedirectTo: location.origin + location.pathname },
     });
     if (error) throw new Error(errMsg(error));
@@ -57,7 +59,11 @@ export class SupabaseApi {
     const [p, g, e, c] = await Promise.all([
       this.sb.from("profiles").select("id, display_name, color, created_at"),
       this.sb.from("games").select("id, title, platform, year, cover_url, added_by, created_at, igdb_id"),
-      this.sb.from("entries").select("id, game_id, user_id, status, rating, hours, review, spoiler, started_at, finished_at, created_at, updated_at"),
+      this.sb
+        .from("entries")
+        .select(
+          "id, game_id, user_id, status, rating, hours, review, spoiler, started_at, finished_at, created_at, updated_at",
+        ),
       this.sb.from("catalog_games").select(CATALOG_COLS),
     ]);
     const err = p.error || g.error || e.error;
@@ -65,7 +71,11 @@ export class SupabaseApi {
     return {
       profiles: p.data,
       games: g.data,
-      entries: e.data.map((x) => ({ ...x, rating: x.rating == null ? null : Number(x.rating), hours: x.hours == null ? null : Number(x.hours) })),
+      entries: e.data.map((x) => ({
+        ...x,
+        rating: x.rating == null ? null : Number(x.rating),
+        hours: x.hours == null ? null : Number(x.hours),
+      })),
       catalog: c.error ? [] : c.data.map(cleanCatalog),
     };
   }
@@ -112,23 +122,43 @@ export class SupabaseApi {
   }
   async catalog(body) {
     let res;
-    try { res = await this.sb.functions.invoke("catalog", { body }); }
-    catch (_) { throw catalogError(); }
+    try {
+      res = await this.sb.functions.invoke("catalog", { body });
+    } catch (_) {
+      throw catalogError();
+    }
     if (res.error) {
       let code = null;
-      try { code = (await res.error.context.json()).error; } catch (_) {}
+      try {
+        code = (await res.error.context.json()).error;
+      } catch (_) {}
       throw catalogError(code);
     }
     return res.data;
   }
-  async catalogSearch(q) { return (await this.catalog({ action: "search", q })).results || []; }
-  async catalogGet(igdbId) { return (await this.catalog({ action: "get", igdb_id: igdbId })).game; }
-  async catalogSimilar(ids) { return (await this.catalog({ action: "similar", ids })).games || []; }
-  async catalogSteam(igdbId) { return (await this.catalog({ action: "steam", igdb_id: igdbId })).steam || null; }
-  async catalogRefresh(ids) { return ((await this.catalog({ action: "refresh", ids })).games || []).map(cleanCatalog); }
+  async catalogSearch(q) {
+    return (await this.catalog({ action: "search", q })).results || [];
+  }
+  async catalogGet(igdbId) {
+    return (await this.catalog({ action: "get", igdb_id: igdbId })).game;
+  }
+  async catalogSimilar(ids) {
+    return (await this.catalog({ action: "similar", ids })).games || [];
+  }
+  async catalogSteam(igdbId) {
+    return (await this.catalog({ action: "steam", igdb_id: igdbId })).steam || null;
+  }
+  async catalogRefresh(ids) {
+    return ((await this.catalog({ action: "refresh", ids })).games || []).map(cleanCatalog);
+  }
   async catalogDiscover() {
     const d = await this.catalog({ action: "discover" });
-    return { built_at: d.built_at, has_history: !!d.has_history, trending: d.trending || [], upcoming: d.upcoming || [] };
+    return {
+      built_at: d.built_at,
+      has_history: !!d.has_history,
+      trending: d.trending || [],
+      upcoming: d.upcoming || [],
+    };
   }
   subscribe(onChange) {
     this.unsubscribe();
@@ -138,10 +168,17 @@ export class SupabaseApi {
         .on("postgres_changes", { event: "*", schema: "public", table: "entries" }, onChange)
         .on("postgres_changes", { event: "*", schema: "public", table: "games" }, onChange)
         .subscribe();
-    } catch (_) { /* live updates are optional */ }
+    } catch (_) {
+      /* live updates are optional */
+    }
   }
   unsubscribe() {
-    if (this.channel) { try { this.sb.removeChannel(this.channel); } catch (_) {} this.channel = null; }
+    if (this.channel) {
+      try {
+        this.sb.removeChannel(this.channel);
+      } catch (_) {}
+      this.channel = null;
+    }
   }
 }
 

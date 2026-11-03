@@ -9,7 +9,9 @@ import { gameTint } from "../../ui/theme.js";
 function finishStage(g, play) {
   const url = coverUrl(g, "cover_big");
   const t = gameTint(g);
-  const img = url ? `<img src="${esc(url)}" alt="" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
+  const img = url
+    ? `<img src="${esc(url)}" alt="" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">`
+    : "";
   const name = `<span class="cv-t">${esc(g.title)}</span>`;
   return `<div class="finish-stage${play ? " play" : ""}" aria-hidden="true" style="--t:${t.tile};--tm:${t.soft}">
     <div class="fs-case">
@@ -24,12 +26,15 @@ export function finishSheet(id) {
   const g = idx.g[id];
   const mine = myEntry(id);
   if (!g || !mine) return "";
-  if (!S.draft || S.draft.gameId !== id) S.draft = { gameId: id, rating: mine.rating, review: mine.review || "", spoiler: !!mine.spoiler };
+  if (!S.draft || S.draft.gameId !== id)
+    S.draft = { gameId: id, rating: mine.rating, review: mine.review || "", spoiler: !!mine.spoiler };
   const d = S.draft;
   const t = took(mine);
   const play = S.sheet && !S.sheet.opened;
   if (S.sheet) S.sheet.opened = true;
-  return sheetFrame("", `
+  return sheetFrame(
+    "",
+    `
     <div class="finish-hero${play ? " play" : ""}">${finishStage(g, play)}
       <h1>Back in its case.</h1>
       <p class="subtle">You finished ${esc(g.title)}${[t ? " " + t : "", mine.hours ? ", " + fmtHours(mine.hours) + " played" : ""].join("")}. How was it?</p>
@@ -43,5 +48,7 @@ export function finishSheet(id) {
       <label class="check"><input type="checkbox" name="spoiler" ${d.spoiler ? "checked" : ""}> <span>Contains spoilers</span></label>
       <p class="error" role="alert"></p>
       <div class="row"><button type="button" class="btn secondary" data-act="open-game" data-id="${id}">Not now</button><button class="btn" type="submit">Save</button></div>
-    </form>`, `You finished ${g.title}`);
+    </form>`,
+    `You finished ${g.title}`,
+  );
 }

@@ -3,7 +3,7 @@
 name: Daily live check
 on:
   schedule:
-    - cron: "0 3 * * *"   # 03:00 UTC = 07:00 Dubai, after the 02:15 UTC Discover job
+    - cron: "0 3 * * *" # 03:00 UTC = 07:00 Dubai, after the 02:15 UTC Discover job
   workflow_dispatch:
 permissions:
   contents: read

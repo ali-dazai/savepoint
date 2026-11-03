@@ -64,8 +64,12 @@ export async function afterSignIn() {
     if (!member) {
       const pending = safeJson(lsGet("sp-pending"));
       if (pending && pending.code && pending.name) {
-        try { await S.api.join(pending.code, pending.name); member = true; }
-        catch (e) { return renderJoin(e.message); }
+        try {
+          await S.api.join(pending.code, pending.name);
+          member = true;
+        } catch (e) {
+          return renderJoin(e.message);
+        }
       }
     }
     if (!member) return renderJoin();

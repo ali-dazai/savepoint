@@ -21,7 +21,12 @@ export function feedView() {
     const g = idx.g[h.game_id];
     const mineTop = h.user_id === S.me;
     const who = mineTop ? "You're playing" : `${nameOf(h.user_id)} is playing`;
-    const sub = [h.started_at ? `started ${since(h.started_at)}` : "", mineTop && h.updated_at ? `last played ${ago(h.updated_at)}` : ""].filter(Boolean).join(", ");
+    const sub = [
+      h.started_at ? `started ${since(h.started_at)}` : "",
+      mineTop && h.updated_at ? `last played ${ago(h.updated_at)}` : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
     top = `<section class="now">
       <button class="now-case case-btn" data-act="open-game" data-id="${g.id}"${mineTop ? ' data-hold="1"' : ""} aria-label="${esc(who)} ${esc(g.title)}">${gameCover(g, { wear: wearOf(h.hours || 0) })}</button>
       <div class="now-text">
@@ -37,12 +42,14 @@ export function feedView() {
   const rest = playing.filter((e) => e !== h).slice(0, 8);
   if (rest.length) {
     top += `<section class="section"><h2 class="section-title">On everyone's shelf now</h2>
-      <div class="mini-shelf"><div class="mini-cases">${rest.map((e) => {
-        const g2 = idx.g[e.game_id];
-        return `<button class="mini" data-act="open-game" data-id="${g2.id}" aria-label="${esc(nameOf(e.user_id))} is playing ${esc(g2.title)}">
+      <div class="mini-shelf"><div class="mini-cases">${rest
+        .map((e) => {
+          const g2 = idx.g[e.game_id];
+          return `<button class="mini" data-act="open-game" data-id="${g2.id}" aria-label="${esc(nameOf(e.user_id))} is playing ${esc(g2.title)}">
           <span class="mini-case">${gameCover(g2, { cls: "sm" })}${avatar(e.user_id, "sm mini-av")}</span>
           <span class="mini-name">${esc(e.user_id === S.me ? "You" : nameOf(e.user_id))}</span></button>`;
-      }).join("")}</div><div class="ledge thin"></div></div></section>`;
+        })
+        .join("")}</div><div class="ledge thin"></div></div></section>`;
   }
 
   const isNew = (e) => S.seenAt && e.user_id !== S.me && e.updated_at > S.seenAt;
@@ -65,7 +72,8 @@ export function feedView() {
   const picksHTML = picks.length
     ? `<section class="section"><h2 class="section-title">Picked for you</h2><div class="rail">${picks.map(pickCard).join("")}</div></section>`
     : S.entries.some((e) => e.user_id === S.me) && myRated < 2
-      ? `<section class="section"><p class="nudge">Rate a couple of games and you'll get picks here, based on your friends' ratings and games like the ones you love.</p></section>` : "";
+      ? `<section class="section"><p class="nudge">Rate a couple of games and you'll get picks here, based on your friends' ratings and games like the ones you love.</p></section>`
+      : "";
 
   return topbar("Feed") + top + picksHTML + list;
 }

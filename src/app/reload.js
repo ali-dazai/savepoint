@@ -8,7 +8,10 @@ import { refreshOpenSheet } from "../ui/sheet.js";
 
 export async function reload() {
   const data = await S.api.loadAll();
-  S.profiles = data.profiles; S.games = data.games; S.entries = data.entries; S.catalog = data.catalog || [];
+  S.profiles = data.profiles;
+  S.games = data.games;
+  S.entries = data.entries;
+  S.catalog = data.catalog || [];
   S.lastLoad = Date.now();
   reindex();
   renderMain();

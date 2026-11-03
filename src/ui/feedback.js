@@ -14,7 +14,10 @@ export function confirmDialog({ title, body, ok, danger }) {
     el.querySelector('[data-r="1"]').focus();
     el.addEventListener("click", (ev) => {
       const b = ev.target.closest("[data-r]");
-      if (b || ev.target === el) { el.remove(); resolve(!!(b && b.dataset.r === "1")); }
+      if (b || ev.target === el) {
+        el.remove();
+        resolve(!!(b && b.dataset.r === "1"));
+      }
     });
   });
 }
@@ -22,16 +25,30 @@ let toastTimer;
 // action: optional { label, fn } button in the toast (e.g. Undo).
 export function toast(msg, action) {
   let t = $(".toast");
-  if (!t) { t = document.createElement("div"); t.setAttribute("role", "status"); document.body.appendChild(t); }
+  if (!t) {
+    t = document.createElement("div");
+    t.setAttribute("role", "status");
+    document.body.appendChild(t);
+  }
   t.className = "toast" + (action ? "" : " plain");
   t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button type="button">${esc(action.label)}</button>` : ""}`;
-  if (action) t.querySelector("button").addEventListener("click", () => { clearTimeout(toastTimer); t.remove(); action.fn(); });
+  if (action)
+    t.querySelector("button").addEventListener("click", () => {
+      clearTimeout(toastTimer);
+      t.remove();
+      action.fn();
+    });
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.remove(), action ? 4500 : 2400);
 }
 
 export async function busy(btn, fn) {
-  if (btn) { btn.disabled = true; }
-  try { return await fn(); }
-  finally { if (btn && btn.isConnected) btn.disabled = false; }
+  if (btn) {
+    btn.disabled = true;
+  }
+  try {
+    return await fn();
+  } finally {
+    if (btn && btn.isConnected) btn.disabled = false;
+  }
 }

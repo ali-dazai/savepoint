@@ -10,10 +10,15 @@ function mergeCatalog(rows) {
   (rows || []).forEach((r) => {
     if (!r || !r.igdb_id) return;
     const i = S.catalog.findIndex((x) => x.igdb_id === r.igdb_id);
-    if (i < 0) { S.catalog.push(r); return; }
-    const old = S.catalog[i], next = { ...old, ...r };
+    if (i < 0) {
+      S.catalog.push(r);
+      return;
+    }
+    const old = S.catalog[i],
+      next = { ...old, ...r };
     // Never let an older copy wipe Steam numbers we fetched more recently.
-    if (old.steam_fetched_at && (!r.steam_fetched_at || r.steam_fetched_at < old.steam_fetched_at)) STEAM_KEYS.forEach((k) => (next[k] = old[k]));
+    if (old.steam_fetched_at && (!r.steam_fetched_at || r.steam_fetched_at < old.steam_fetched_at))
+      STEAM_KEYS.forEach((k) => (next[k] = old[k]));
     S.catalog[i] = next;
   });
   reindex();
@@ -41,8 +46,11 @@ export async function maintainCatalog() {
     mergeCatalog(await S.api.catalogRefresh(batch));
     safeRenderMain();
     refreshOpenSheet();
-  } catch (_) { /* try again next session */ }
-  finally { maintaining = false; }
+  } catch (_) {
+    /* try again next session */
+  } finally {
+    maintaining = false;
+  }
 }
 
 // S35: Steam review score + players online, looked up when a game page opens (the server caches it for a day).
@@ -50,13 +58,23 @@ export async function ensureSteam(igdbId) {
   const c = catRow(igdbId);
   if (!c || !c.steam_appid || !S.api.catalogSteam || S.steamTried.has(igdbId)) return;
   if (c.steam_fetched_at && Date.now() - new Date(c.steam_fetched_at).getTime() < DAY_MS) return;
-  S.steamTried.add(igdbId); S.steamLoading.add(igdbId);
+  S.steamTried.add(igdbId);
+  S.steamLoading.add(igdbId);
   updatePageChips();
   try {
     const st = await S.api.catalogSteam(igdbId);
     const live = catRow(igdbId) || c; // the row may have been replaced by a refresh while we waited
-    if (st) Object.assign(live, { steam_desc: st.desc, steam_pct: st.pct, steam_total: st.total, steam_players: st.players, steam_fetched_at: st.fetched_at || new Date().toISOString() });
-  } catch (_) { /* the chip just doesn't show */ }
+    if (st)
+      Object.assign(live, {
+        steam_desc: st.desc,
+        steam_pct: st.pct,
+        steam_total: st.total,
+        steam_players: st.players,
+        steam_fetched_at: st.fetched_at || new Date().toISOString(),
+      });
+  } catch (_) {
+    /* the chip just doesn't show */
+  }
   S.steamLoading.delete(igdbId);
   updatePageChips();
 }

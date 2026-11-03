@@ -15,29 +15,29 @@ turning on in the dashboard.
 
 ## Table by table
 
-| Table | RLS | `anon` | `authenticated` can… | Verdict |
-|---|---|---|---|---|
-| `settings` | on, no policies | nothing | nothing (all privileges revoked) | ✅ invite code unreadable from the app |
-| `profiles` | on | nothing | select all rows (`is_member()`); update own row, columns `display_name, color` only | ✅ no insert/delete; membership only via `join_group()` |
-| `games` | on | nothing | select (`is_member()`); insert with `added_by = auth.uid()`; update any row (`is_member()`), columns `title, platform, year, cover_url, igdb_id` only; delete where `added_by = auth.uid()` | ✅ matches decision D12 (anyone edits, only the adder deletes) |
-| `entries` | on | nothing | select (`is_member()`); insert with `user_id = auth.uid()`; update/delete own rows, update columns `status, rating, hours, review, spoiler, started_at, finished_at` only | ✅ `game_id`/`user_id` can't be moved (no column grant) |
-| `catalog_games` | on | nothing | select (`is_member()`) | ✅ writes only by the Edge Function (secret key) |
-| `server_cache` | on, no policies | nothing | nothing | ✅ holds the Twitch token and cron token |
-| `trend_snapshots` | on, no policies | nothing | nothing | ✅ server-only history |
+| Table             | RLS             | `anon`  | `authenticated` can…                                                                                                                                                                        | Verdict                                                        |
+| ----------------- | --------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `settings`        | on, no policies | nothing | nothing (all privileges revoked)                                                                                                                                                            | ✅ invite code unreadable from the app                         |
+| `profiles`        | on              | nothing | select all rows (`is_member()`); update own row, columns `display_name, color` only                                                                                                         | ✅ no insert/delete; membership only via `join_group()`        |
+| `games`           | on              | nothing | select (`is_member()`); insert with `added_by = auth.uid()`; update any row (`is_member()`), columns `title, platform, year, cover_url, igdb_id` only; delete where `added_by = auth.uid()` | ✅ matches decision D12 (anyone edits, only the adder deletes) |
+| `entries`         | on              | nothing | select (`is_member()`); insert with `user_id = auth.uid()`; update/delete own rows, update columns `status, rating, hours, review, spoiler, started_at, finished_at` only                   | ✅ `game_id`/`user_id` can't be moved (no column grant)        |
+| `catalog_games`   | on              | nothing | select (`is_member()`)                                                                                                                                                                      | ✅ writes only by the Edge Function (secret key)               |
+| `server_cache`    | on, no policies | nothing | nothing                                                                                                                                                                                     | ✅ holds the Twitch token and cron token                       |
+| `trend_snapshots` | on, no policies | nothing | nothing                                                                                                                                                                                     | ✅ server-only history                                         |
 
 `force row level security` is not set anywhere. That only matters for the table owner (`postgres`), which the app
 never connects as, so it is fine.
 
 ## Functions
 
-| Function | Definer? | `search_path` pinned | Executable by | Verdict |
-|---|---|---|---|---|
-| `is_member()` | yes | yes | `authenticated` | ✅ intended (it is what every policy gates on) |
-| `join_group(code, name)` | yes | yes | `authenticated` | ✅ intended; the only way into `profiles` |
-| `add_hours(entry, delta)` | no (invoker) | yes | `authenticated` | ✅ RLS still applies; clamps delta to ±100 |
-| `entry_dates()` (trigger) | no | yes | `anon`, `authenticated` (default) | ⚠️ hygiene, see F2 |
-| `touch_updated_at()` (trigger) | no | **no** | `anon`, `authenticated` (default) | ⚠️ advisor warning, see F1 |
-| `rls_auto_enable()` | yes | yes | `anon`, `authenticated` | Supabase's own helper, not ours. Postgres refuses to run event-trigger functions directly, so it is harmless. Leave it. |
+| Function                       | Definer?     | `search_path` pinned | Executable by                     | Verdict                                                                                                                 |
+| ------------------------------ | ------------ | -------------------- | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `is_member()`                  | yes          | yes                  | `authenticated`                   | ✅ intended (it is what every policy gates on)                                                                          |
+| `join_group(code, name)`       | yes          | yes                  | `authenticated`                   | ✅ intended; the only way into `profiles`                                                                               |
+| `add_hours(entry, delta)`      | no (invoker) | yes                  | `authenticated`                   | ✅ RLS still applies; clamps delta to ±100                                                                              |
+| `entry_dates()` (trigger)      | no           | yes                  | `anon`, `authenticated` (default) | ⚠️ hygiene, see F2                                                                                                      |
+| `touch_updated_at()` (trigger) | no           | **no**               | `anon`, `authenticated` (default) | ⚠️ advisor warning, see F1                                                                                              |
+| `rls_auto_enable()`            | yes          | yes                  | `anon`, `authenticated`           | Supabase's own helper, not ours. Postgres refuses to run event-trigger functions directly, so it is harmless. Leave it. |
 
 ## Findings
 

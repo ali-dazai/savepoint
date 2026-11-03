@@ -9,23 +9,35 @@ import { manualVars, styleVars } from "./theme.js";
 // push: remember the current sheet so Back returns to it (e.g. friend > game, game > share).
 export function openSheet(sheet, push) {
   S.back = push && S.sheet ? S.sheet : null;
-  if (S.share && sheet.kind !== "share") { try { if (S.share.url) URL.revokeObjectURL(S.share.url); } catch (_) {} S.share = null; }
+  if (S.share && sheet.kind !== "share") {
+    try {
+      if (S.share.url) URL.revokeObjectURL(S.share.url);
+    } catch (_) {}
+    S.share = null;
+  }
   S.sheet = sheet;
   renderSheet();
   const def = sheets[sheet.kind];
   if (def && def.onOpen) def.onOpen(sheet);
 }
 export function closeSheet() {
-  if (S.share && S.share.url) { try { URL.revokeObjectURL(S.share.url); } catch (_) {} }
+  if (S.share && S.share.url) {
+    try {
+      URL.revokeObjectURL(S.share.url);
+    } catch (_) {}
+  }
   S.share = null;
-  S.sheet = null; S.draft = null; S.back = null;
+  S.sheet = null;
+  S.draft = null;
+  S.back = null;
   layer().innerHTML = "";
   document.body.style.overflow = "";
 }
 export function goBack() {
   if (!S.back) return closeSheet();
   const b = S.back;
-  S.back = null; S.draft = null;
+  S.back = null;
+  S.draft = null;
   openSheet(b, false);
 }
 // After a data reload: let the open sheet update its read-only parts (a half-filled form is never wiped).
@@ -50,7 +62,9 @@ export function pageFrame(label, head, body, { tint, hs }) {
     <div class="page-inner">${head}<div class="booklet" style="${styleVars(manualVars(hs[0], hs[1]))}"><div class="g-body">${body}</div></div></div></div>`;
 }
 function caseHead({ url, tint, title }) {
-  const img = url ? `<img src="${esc(url)}" alt="" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
+  const img = url
+    ? `<img src="${esc(url)}" alt="" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">`
+    : "";
   const name = `<span class="cv-t">${esc(title)}</span>`;
   return `<div class="open-case" aria-hidden="true" style="--t:${tint.tile};--tm:${tint.soft}">
     <div class="tray"><div class="disc"><div class="label">${img || name}</div><span class="hub"></span></div></div>
@@ -79,10 +93,13 @@ export function renderSheet() {
   const first = $("#layer [autofocus]");
   if (first && !matchMedia("(pointer: coarse)").matches) first.focus();
 }
-function scroller() { return $(".page") || $(".sheet"); }
+function scroller() {
+  return $(".page") || $(".sheet");
+}
 export function rerenderKeepScroll() {
   const el = scroller();
   const top = el ? el.scrollTop : 0;
   renderSheet();
-  const el2 = scroller(); if (el2) el2.scrollTop = top;
+  const el2 = scroller();
+  if (el2) el2.scrollTop = top;
 }

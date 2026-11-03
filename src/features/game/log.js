@@ -9,7 +9,10 @@ import { refreshOpenSheet, renderSheet } from "../../ui/sheet.js";
 export function syncDraftFromForm() {
   const f = $('form[data-form="entry"], form[data-form="finish"]');
   if (!f || !S.draft) return;
-  if (f.hours) { const h = f.hours.value.trim(); S.draft.hours = h === "" ? null : Number(h); }
+  if (f.hours) {
+    const h = f.hours.value.trim();
+    S.draft.hours = h === "" ? null : Number(h);
+  }
   if (f.review) S.draft.review = f.review.value;
   if (f.spoiler) S.draft.spoiler = f.spoiler.checked;
   if (f.started_at) S.draft.started_at = fromDateInput(f.started_at.value);
@@ -24,7 +27,18 @@ function applyLocalEntry(gameId, fields) {
   let e = myEntry(gameId);
   const prev = e ? e.status : null;
   if (!e) {
-    e = { id: "tmp-" + Math.random().toString(36).slice(2), game_id: gameId, user_id: S.me, rating: null, hours: null, review: null, spoiler: false, started_at: null, finished_at: null, created_at: now };
+    e = {
+      id: "tmp-" + Math.random().toString(36).slice(2),
+      game_id: gameId,
+      user_id: S.me,
+      rating: null,
+      hours: null,
+      review: null,
+      spoiler: false,
+      started_at: null,
+      finished_at: null,
+      created_at: now,
+    };
     S.entries.push(e);
   }
   Object.assign(e, fields, { updated_at: now });
@@ -39,7 +53,11 @@ function queueFor(gameId, fn) {
   const prev = S.pending[gameId] || Promise.resolve();
   const next = prev.catch(() => {}).then(fn);
   S.pending[gameId] = next;
-  next.finally(() => { if (S.pending[gameId] === next) delete S.pending[gameId]; }).catch(() => {});
+  next
+    .finally(() => {
+      if (S.pending[gameId] === next) delete S.pending[gameId];
+    })
+    .catch(() => {});
   return next;
 }
 
@@ -58,7 +76,9 @@ export async function saveEntryOptimistic(gameId, fields, okMsg) {
     syncSoon();
     return true;
   } catch (e) {
-    S.entries = JSON.parse(snapshot); reindex(); renderMain();
+    S.entries = JSON.parse(snapshot);
+    reindex();
+    renderMain();
     if (S.sheet) renderSheet();
     toast(e.message || "Couldn't save. Check your connection and try again.");
     return false;
@@ -73,12 +93,21 @@ export async function quickHours(gameId, delta, opts = {}) {
   const before = e.hours;
   e.hours = Math.round(Math.min(99999, Math.max(0, (e.hours || 0) + delta)) * 10) / 10;
   e.updated_at = new Date().toISOString();
-  reindex(); renderMain(); refreshOpenSheet();
-  if (S.draft && S.draft.gameId === gameId) { S.draft.hours = e.hours; const f = $('form[data-form="entry"]'); if (f && f.hours) f.hours.value = e.hours; }
+  reindex();
+  renderMain();
+  refreshOpenSheet();
+  if (S.draft && S.draft.gameId === gameId) {
+    S.draft.hours = e.hours;
+    const f = $('form[data-form="entry"]');
+    if (f && f.hours) f.hours.value = e.hours;
+  }
   const g = idx.g[gameId];
   if (opts.undone) toast(`Undone. ${fmtHours(e.hours) || "0h"} on ${g ? g.title : "this game"}`);
-  else toast(`+${delta < 1 ? "30m" : delta + "h"} on ${g ? g.title : "this game"} (${fmtHours(e.hours)} total)`,
-    opts.undo ? { label: "Undo", fn: () => quickHours(gameId, -delta, { undone: true }) } : undefined);
+  else
+    toast(
+      `+${delta < 1 ? "30m" : delta + "h"} on ${g ? g.title : "this game"} (${fmtHours(e.hours)} total)`,
+      opts.undo ? { label: "Undo", fn: () => quickHours(gameId, -delta, { undone: true }) } : undefined,
+    );
   try {
     await queueFor(gameId, async () => {
       const live = myEntry(gameId);
@@ -89,8 +118,11 @@ export async function quickHours(gameId, delta, opts = {}) {
     });
     syncSoon();
   } catch (err) {
-    const cur = myEntry(gameId); if (cur) cur.hours = before;
-    reindex(); renderMain(); refreshOpenSheet();
+    const cur = myEntry(gameId);
+    if (cur) cur.hours = before;
+    reindex();
+    renderMain();
+    refreshOpenSheet();
     toast(err.message);
   }
 }

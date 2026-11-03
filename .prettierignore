@@ -1,0 +1,7 @@
+node_modules/
+vendor/
+test-results/
+package-lock.json
+fonts/
+icons/
+config.js

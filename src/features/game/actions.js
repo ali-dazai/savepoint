@@ -11,8 +11,13 @@ import { renderMain } from "../../ui/screen.js";
 import { closeSheet, openSheet, renderSheet, rerenderKeepScroll } from "../../ui/sheet.js";
 
 export const gameActions = {
-  "open-game"(el) { S.draft = null; openSheet({ kind: "game", id: el.dataset.id }, !!(S.sheet && S.sheet.kind === "friend")); },
-  "open-row"(el) { openRow(Number(el.dataset.igdb), el.dataset.why); },
+  "open-game"(el) {
+    S.draft = null;
+    openSheet({ kind: "game", id: el.dataset.id }, !!(S.sheet && S.sheet.kind === "friend"));
+  },
+  "open-row"(el) {
+    openRow(Number(el.dataset.igdb), el.dataset.why);
+  },
   async "ext-add"(el) {
     const sh = S.sheet;
     if (!sh || sh.kind !== "ext") return;
@@ -23,28 +28,49 @@ export const gameActions = {
         S.draft = null;
         openSheet({ kind: "game", id: gameId }, false);
         toast(status === "want" ? "Added to Want to play" : "Added to your shelf");
-        if (status === "finished") { S.draft = null; openSheet({ kind: "finish", id: gameId }, true); }
+        if (status === "finished") {
+          S.draft = null;
+          openSheet({ kind: "finish", id: gameId }, true);
+        }
       } catch (e) {
-        const err = $("#layer .error"); if (err) err.textContent = e.message; else toast(e.message);
+        const err = $("#layer .error");
+        if (err) err.textContent = e.message;
+        else toast(e.message);
       }
     });
   },
   "ext-more"() {
     const sh = S.sheet;
     const full = catRow(sh.igdb);
-    const row = { ...(sh.row || {}), igdb_id: sh.igdb, name: (full && full.name) || (sh.row && sh.row.name), platforms: (full && full.platforms) || (sh.row && sh.row.platforms) || [], cover_image_id: (full && full.cover_image_id) || (sh.row && sh.row.cover_image_id) };
+    const row = {
+      ...(sh.row || {}),
+      igdb_id: sh.igdb,
+      name: (full && full.name) || (sh.row && sh.row.name),
+      platforms: (full && full.platforms) || (sh.row && sh.row.platforms) || [],
+      cover_image_id: (full && full.cover_image_id) || (sh.row && sh.row.cover_image_id),
+    };
     S.cat = { q: row.name, results: [row], loading: false, error: null, picked: row, platform: null };
     openSheet({ kind: "add", mode: "search", status: "want" }, true);
   },
-  async "quick-hours"(el) { quickHours(el.dataset.id, Number(el.dataset.delta)); },
+  async "quick-hours"(el) {
+    quickHours(el.dataset.id, Number(el.dataset.delta));
+  },
   reveal(el) {
     const e = S.entries.find((x) => x.id === el.dataset.id);
     if (!e) return;
     S.revealed.add(e.id);
     el.outerHTML = spoilerText(e, el.classList.contains("quote") ? "quote" : "review-text");
   },
-  more(el) { const p = $("#summary"); if (p) { p.classList.toggle("open"); el.textContent = p.classList.contains("open") ? "Less" : "More"; } },
-  "edit-game"(el) { openSheet({ kind: "edit", id: el.dataset.id }, true); },
+  more(el) {
+    const p = $("#summary");
+    if (p) {
+      p.classList.toggle("open");
+      el.textContent = p.classList.contains("open") ? "Less" : "More";
+    }
+  },
+  "edit-game"(el) {
+    openSheet({ kind: "edit", id: el.dataset.id }, true);
+  },
   "pick-status"(el) {
     S.draft.status = el.dataset.status;
     el.parentElement.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", b === el));
@@ -52,7 +78,8 @@ export const gameActions = {
   rate(el, ev) {
     const n = Number(el.dataset.n);
     let val = n;
-    if (ev.detail > 0) { // pointer click: left half = half star
+    if (ev.detail > 0) {
+      // pointer click: left half = half star
       const r = el.getBoundingClientRect();
       if (ev.clientX - r.left < r.width / 2) val = n - 0.5;
     }
@@ -60,28 +87,58 @@ export const gameActions = {
     S.draft.rating = val;
     rerenderKeepScroll();
   },
-  "clear-rating"() { syncDraftFromForm(); S.draft.rating = null; rerenderKeepScroll(); },
+  "clear-rating"() {
+    syncDraftFromForm();
+    S.draft.rating = null;
+    rerenderKeepScroll();
+  },
   async "remove-entry"(el) {
-    const ok = await confirmDialog({ title: "Remove from your shelf?", body: "Your status, rating, hours and review for this game will be deleted. The game stays on the group shelf.", ok: "Remove", danger: true });
+    const ok = await confirmDialog({
+      title: "Remove from your shelf?",
+      body: "Your status, rating, hours and review for this game will be deleted. The game stays on the group shelf.",
+      ok: "Remove",
+      danger: true,
+    });
     if (!ok) return;
     const id = el.dataset.id;
     const before = S.entries.slice();
-    S.entries = S.entries.filter((x) => x.id !== id); S.draft = null; reindex(); renderMain(); renderSheet();
+    S.entries = S.entries.filter((x) => x.id !== id);
+    S.draft = null;
+    reindex();
+    renderMain();
+    renderSheet();
     toast("Removed from your shelf");
-    try { await S.api.deleteEntry(id); syncSoon(); }
-    catch (e) { S.entries = before; reindex(); renderMain(); renderSheet(); toast(e.message); }
+    try {
+      await S.api.deleteEntry(id);
+      syncSoon();
+    } catch (e) {
+      S.entries = before;
+      reindex();
+      renderMain();
+      renderSheet();
+      toast(e.message);
+    }
   },
   async "delete-game"(el) {
     const id = el.dataset.id;
     const n = (idx.byGame[id] || []).filter((e) => e.user_id !== S.me).length;
     const ok = await confirmDialog({
       title: `Delete ${idx.g[id].title}?`,
-      body: n ? `This removes it for everyone, including ${n} ${n === 1 ? "friend's log" : "friends' logs"} and reviews.` : "This removes it from the group shelf.",
-      ok: "Delete game", danger: true,
+      body: n
+        ? `This removes it for everyone, including ${n} ${n === 1 ? "friend's log" : "friends' logs"} and reviews.`
+        : "This removes it from the group shelf.",
+      ok: "Delete game",
+      danger: true,
     });
     if (!ok) return;
-    try { await S.api.deleteGame(id); closeSheet(); await reload(); toast("Game deleted"); }
-    catch (e) { toast(e.message); }
+    try {
+      await S.api.deleteGame(id);
+      closeSheet();
+      await reload();
+      toast("Game deleted");
+    } catch (e) {
+      toast(e.message);
+    }
   },
 };
 
@@ -89,8 +146,10 @@ export const gameForms = {
   async entry() {
     syncDraftFromForm();
     const d = S.draft;
-    if (d.hours != null && (!Number.isFinite(d.hours) || d.hours < 0)) throw new Error("Hours should be a number like 12 or 3.5.");
-    if (d.started_at && d.finished_at && d.finished_at < d.started_at) throw new Error("The finish date is before the start date.");
+    if (d.hours != null && (!Number.isFinite(d.hours) || d.hours < 0))
+      throw new Error("Hours should be a number like 12 or 3.5.");
+    if (d.started_at && d.finished_at && d.finished_at < d.started_at)
+      throw new Error("The finish date is before the start date.");
     const mine = myEntry(d.gameId);
     const fields = {
       status: d.status,
@@ -111,10 +170,15 @@ export const gameForms = {
   },
   async finish(f) {
     syncDraftFromForm();
-    const d = S.draft, gameId = f.dataset.id;
+    const d = S.draft,
+      gameId = f.dataset.id;
     const review = (d.review || "").trim();
     S.draft = null;
-    const saving = saveEntryOptimistic(gameId, { rating: d.rating, review: review || null, spoiler: !!d.spoiler && !!review }, "Saved. Nice work finishing it.");
+    const saving = saveEntryOptimistic(
+      gameId,
+      { rating: d.rating, review: review || null, spoiler: !!d.spoiler && !!review },
+      "Saved. Nice work finishing it.",
+    );
     openSheet({ kind: "game", id: gameId });
     await saving;
   },

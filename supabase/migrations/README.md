@@ -5,8 +5,8 @@ notes repo (`savepoint-notes/backend/`), because that history includes the setup
 placeholder. This folder holds **proposed** migrations only: SQL that has been reviewed but **not yet applied** to the
 live project. Nothing here runs automatically.
 
-| File | Status | What it does |
-|---|---|---|
+| File                            | Status   | What it does                                                                                                                        |
+| ------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `20261103_harden_functions.sql` | proposed | Pins `search_path` on `touch_updated_at()`; revokes API-role `EXECUTE` on the two trigger functions. See `docs/rls-audit.md` F1–F2. |
 
 ## Applying one

@@ -1,12 +1,7 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "includes": [
-      "**/*.js",
-      "!vendor",
-      "!node_modules",
-      "!test-results"
-    ]
+    "includes": ["**/*.js", "!vendor", "!node_modules", "!test-results"]
   },
   "formatter": {
     "enabled": false
@@ -34,9 +29,7 @@
   },
   "overrides": [
     {
-      "includes": [
-        "tests/**"
-      ],
+      "includes": ["tests/**"],
       "linter": {
         "rules": {
           "performance": {

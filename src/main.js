@@ -32,19 +32,30 @@ import { registerServiceWorker } from "./ui/update.js";
 // Tabs, in display order.
 registerTab({ id: "feed", label: "Feed", view: feedView });
 registerTab({ id: "shelf", label: "Shelf", view: shelfView });
-registerTab({ id: "discover", label: "Discover", view: discoverView, onEnter: () => loadDiscover(), onReselect: () => loadDiscover(true) });
+registerTab({
+  id: "discover",
+  label: "Discover",
+  view: discoverView,
+  onEnter: () => loadDiscover(),
+  onReselect: () => loadDiscover(true),
+});
 registerTab({ id: "friends", label: "Friends", view: friendsView });
 
 // Sheets and pages that open in #layer.
 registerSheet("game", {
   render: (sh) => gamePage(sh.id),
-  onOpen(sh) { const g = idx.g[sh.id]; if (g && g.igdb_id != null) ensureSteam(g.igdb_id); },
+  onOpen(sh) {
+    const g = idx.g[sh.id];
+    if (g && g.igdb_id != null) ensureSteam(g.igdb_id);
+  },
   // After a reload only the read-only parts update, so a half-filled log form is never wiped.
   refresh(sh) {
     if (!idx.g[sh.id]) return closeSheet();
-    const box = $("#others"); if (box) box.innerHTML = othersReviews(sh.id);
+    const box = $("#others");
+    if (box) box.innerHTML = othersReviews(sh.id);
     updatePageChips();
-    const sess = $("#sessions"); const mine = myEntry(sh.id);
+    const sess = $("#sessions");
+    const mine = myEntry(sh.id);
     if (sess && mine && mine.status !== "want") sess.innerHTML = sessionsHTML(mine);
   },
 });
@@ -52,7 +63,13 @@ registerSheet("ext", {
   render: (sh) => extPage(sh),
   onOpen: (sh) => loadExt(sh),
   // The moment the game lands on the shelf, switch to its real page.
-  refresh(sh) { const g = idx.byIgdb[sh.igdb]; if (g) { S.draft = null; openSheet({ kind: "game", id: g.id }, false); } },
+  refresh(sh) {
+    const g = idx.byIgdb[sh.igdb];
+    if (g) {
+      S.draft = null;
+      openSheet({ kind: "game", id: g.id }, false);
+    }
+  },
 });
 registerSheet("add", { render: (sh) => addSheet(sh) });
 registerSheet("edit", { render: (sh) => editSheet(sh.id) });

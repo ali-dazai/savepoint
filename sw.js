@@ -2,7 +2,12 @@
 // (and opens at all when the connection is bad). Data always comes live from Supabase.
 const VERSION = "savepoint-v9";
 const SHELL = [
-  "./", "./index.html", "./styles.css", "./config.js", "./vendor/supabase.js", "./manifest.webmanifest",
+  "./",
+  "./index.html",
+  "./styles.css",
+  "./config.js",
+  "./vendor/supabase.js",
+  "./manifest.webmanifest",
   "./src/app/actions.js",
   "./src/app/boot.js",
   "./src/app/registry.js",
@@ -46,9 +51,15 @@ const SHELL = [
   "./src/ui/sheet.js",
   "./src/ui/theme.js",
   "./src/ui/update.js",
-  "./fonts/funnel-sans-latin.woff2", "./fonts/funnel-sans-latin-ext.woff2", "./fonts/funnel-sans-latin-italic.woff2",
-  "./fonts/funnel-display-latin.woff2", "./fonts/funnel-display-latin-ext.woff2",
-  "./icons/icon-180.png", "./icons/icon-192.png", "./icons/icon-512.png", "./icons/favicon-64.png",
+  "./fonts/funnel-sans-latin.woff2",
+  "./fonts/funnel-sans-latin-ext.woff2",
+  "./fonts/funnel-sans-latin-italic.woff2",
+  "./fonts/funnel-display-latin.woff2",
+  "./fonts/funnel-display-latin-ext.woff2",
+  "./icons/icon-180.png",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png",
+  "./icons/favicon-64.png",
 ];
 
 self.addEventListener("install", (e) => {
@@ -62,9 +73,10 @@ self.addEventListener("message", (e) => {
 
 self.addEventListener("activate", (e) => {
   e.waitUntil(
-    caches.keys()
+    caches
+      .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim())
+      .then(() => self.clients.claim()),
   );
 });
 
@@ -78,10 +90,13 @@ self.addEventListener("fetch", (e) => {
     e.respondWith(
       fetch(req)
         .then((res) => {
-          if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); }
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(VERSION).then((c) => c.put(req, copy));
+          }
           return res;
         })
-        .catch(() => caches.match(req).then((hit) => hit || caches.match("./index.html")))
+        .catch(() => caches.match(req).then((hit) => hit || caches.match("./index.html"))),
     );
     return;
   }

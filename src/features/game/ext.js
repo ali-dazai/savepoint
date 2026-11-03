@@ -18,12 +18,19 @@ export function extPage(sh) {
   const name = r.name || "Game";
   const img = r.cover_image_id;
   const year = full && full.first_release_date ? full.first_release_date.slice(0, 4) : r.year;
-  const meta = [year, full && full.genres && full.genres[0], (r.platforms || []).slice(0, 3).join(", ")].filter(Boolean).join(", ");
+  const meta = [year, full && full.genres && full.genres[0], (r.platforms || []).slice(0, 3).join(", ")]
+    .filter(Boolean)
+    .join(", ");
   const tint = tintFrom(full && full.cover_color, id);
   const head = pageHead({
-    title: name, meta,
+    title: name,
+    meta,
     art: { url: img ? IGDB_IMG(img, "cover_big_2x") : "", tint, title: name },
-    chips: full ? scoreChips(full, null) : r.critic_score != null ? scoreChips({ critic_score: r.critic_score }, null) : "",
+    chips: full
+      ? scoreChips(full, null)
+      : r.critic_score != null
+        ? scoreChips({ critic_score: r.critic_score }, null)
+        : "",
   });
   const rel = releaseInfo(full);
   const upcoming = rel && rel.upcoming;
@@ -45,7 +52,10 @@ export async function loadExt(sh) {
   const id = sh.igdb;
   if (idx.byIgdb[id]) return refreshOpenSheet();
   const have = catRow(id);
-  if (have && have.summary !== undefined) { ensureSteam(id); return; }
+  if (have && have.summary !== undefined) {
+    ensureSteam(id);
+    return;
+  }
   try {
     const row = await S.api.catalogGet(id);
     S.ext[id] = row;
@@ -68,20 +78,31 @@ export function openRow(igdbId, why) {
 export async function addFromCatalog(igdbId, status, opts = {}) {
   const existing = idx.byIgdb[igdbId];
   if (existing) {
-    if (!myEntry(existing.id) && status !== "none") await saveEntryOptimistic(existing.id, { status, rating: null, hours: null, review: null });
+    if (!myEntry(existing.id) && status !== "none")
+      await saveEntryOptimistic(existing.id, { status, rating: null, hours: null, review: null });
     return existing.id;
   }
-  const full = (catRow(igdbId) && catRow(igdbId).summary !== undefined) ? catRow(igdbId) : await S.api.catalogGet(igdbId);
+  const full = catRow(igdbId) && catRow(igdbId).summary !== undefined ? catRow(igdbId) : await S.api.catalogGet(igdbId);
   const light = opts.light || findRow(igdbId) || {};
   const year = full.first_release_date ? Number(String(full.first_release_date).slice(0, 4)) : light.year || null;
   let g;
   try {
-    g = await S.api.addGame({ title: full.name || light.name, platform: opts.platform || null, year, cover_url: null, igdb_id: igdbId });
+    g = await S.api.addGame({
+      title: full.name || light.name,
+      platform: opts.platform || null,
+      year,
+      cover_url: null,
+      igdb_id: igdbId,
+    });
   } catch (e) {
     if (/already on the shelf/i.test(e.message)) {
       await reload();
       const ex = idx.byIgdb[igdbId];
-      if (ex) { if (!myEntry(ex.id) && status !== "none") await saveEntryOptimistic(ex.id, { status, rating: null, hours: null, review: null }); return ex.id; }
+      if (ex) {
+        if (!myEntry(ex.id) && status !== "none")
+          await saveEntryOptimistic(ex.id, { status, rating: null, hours: null, review: null });
+        return ex.id;
+      }
     }
     throw e;
   }

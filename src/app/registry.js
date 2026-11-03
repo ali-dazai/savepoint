@@ -10,7 +10,15 @@ export const sheets = {};
 export const actions = {};
 export const forms = {};
 
-export function registerTab(tab) { tabs.push(tab); }
-export function registerSheet(kind, def) { sheets[kind] = def; }
-export function registerActions(map) { Object.assign(actions, map); }
-export function registerForms(map) { Object.assign(forms, map); }
+export function registerTab(tab) {
+  tabs.push(tab);
+}
+export function registerSheet(kind, def) {
+  sheets[kind] = def;
+}
+export function registerActions(map) {
+  Object.assign(actions, map);
+}
+export function registerForms(map) {
+  Object.assign(forms, map);
+}

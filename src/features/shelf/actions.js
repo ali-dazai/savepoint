@@ -4,6 +4,13 @@ import { lsSet } from "../../core/util.js";
 import { renderMain } from "../../ui/screen.js";
 
 export const shelfActions = {
-  scope(el) { S.scope = el.dataset.scope; lsSet("sp-scope", S.scope); renderMain(); },
-  "status-filter"(el) { S.status = el.dataset.status; renderMain(); },
+  scope(el) {
+    S.scope = el.dataset.scope;
+    lsSet("sp-scope", S.scope);
+    renderMain();
+  },
+  "status-filter"(el) {
+    S.status = el.dataset.status;
+    renderMain();
+  },
 };
