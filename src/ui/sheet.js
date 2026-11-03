@@ -6,6 +6,7 @@ import { $, esc } from "../core/util.js";
 import { layer } from "./screen.js";
 import { manualVars, styleVars } from "./theme.js";
 
+// push: remember the current sheet so Back returns to it (e.g. friend > game, game > share).
 export function openSheet(sheet, push) {
   S.back = push && S.sheet ? S.sheet : null;
   if (S.share && sheet.kind !== "share") { try { if (S.share.url) URL.revokeObjectURL(S.share.url); } catch (_) {} S.share = null; }
@@ -48,7 +49,7 @@ export function pageFrame(label, head, body, { tint, hs }) {
   return `<div class="page${opening ? " opening" : ""}" role="dialog" aria-modal="true" aria-label="${esc(label)}" style="--hb:${tint.bg};--hm:${tint.soft}">
     <div class="page-inner">${head}<div class="booklet" style="${styleVars(manualVars(hs[0], hs[1]))}"><div class="g-body">${body}</div></div></div></div>`;
 }
-export function caseHead({ url, tint, title }) {
+function caseHead({ url, tint, title }) {
   const img = url ? `<img src="${esc(url)}" alt="" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
   const name = `<span class="cv-t">${esc(title)}</span>`;
   return `<div class="open-case" aria-hidden="true" style="--t:${tint.tile};--tm:${tint.soft}">
@@ -78,7 +79,7 @@ export function renderSheet() {
   const first = $("#layer [autofocus]");
   if (first && !matchMedia("(pointer: coarse)").matches) first.focus();
 }
-export function scroller() { return $(".page") || $(".sheet"); }
+function scroller() { return $(".page") || $(".sheet"); }
 export function rerenderKeepScroll() {
   const el = scroller();
   const top = el ? el.scrollTop : 0;

@@ -3,7 +3,7 @@ import { S, catOf, catRow, idx } from "../core/state.js";
 import { $, hash } from "../core/util.js";
 
 // ---------------- Colour: tints taken from each game's cover ----------------
-export function hexToHsl(hex) {
+function hexToHsl(hex) {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
   if (!m) return null;
   const n = parseInt(m[1], 16);
@@ -18,7 +18,7 @@ export function hexToHsl(hex) {
   return [h, s, l];
 }
 export const hsl = (h, s, l) => `hsl(${Math.round(h)}, ${Math.round(s * 100)}%, ${Math.round(l * 100)}%)`;
-export const tintCache = new Map();
+const tintCache = new Map();
 // bg: dark panel behind a game (hero card, game page header). tile: cover placeholder. soft: readable text on either.
 export function tintFrom(color, key) {
   const k = (color || "") + "|" + key;
@@ -35,14 +35,14 @@ export function gameTint(g) { const c = catOf(g); return tintFrom(c && c.cover_c
 export function rowTint(r) { const c = catRow(r.igdb_id); return tintFrom((c && c.cover_color) || r.cover_color, r.igdb_id || r.name); }
 
 // ---------------- Case Wall: the wall takes a deep shade of the game you're playing ----------------
-export const WALL_DEFAULT = [352, 0.38];
+const WALL_DEFAULT = [352, 0.38];
 export function hueSat(color, key) {
   const p = hexToHsl(color);
   if (p) return [p[0], p[1] < 0.1 ? 0.06 : Math.min(0.5, Math.max(0.22, p[1] * 0.75))];
   return [hash(String(key)) % 360, 0.25];
 }
 export function gameHueSat(g) { const c = catOf(g); return hueSat(c && c.cover_color, g.igdb_id || g.id || g.title); }
-export function wallVars(h, s) {
+function wallVars(h, s) {
   return {
     "--bg": hsl(h, s, 0.13), "--wall-2": hsl(h, s, 0.085), "--lip": hsl(h, s * 0.9, 0.22),
     "--s1": hsl(h, s, 0.1), "--s2": hsl(h, s * 0.85, 0.19), "--s3": hsl(h, s * 0.85, 0.25), "--sheet": hsl(h, s, 0.11),
@@ -61,7 +61,7 @@ export function manualVars(h, s) {
   };
 }
 export const styleVars = (v) => Object.entries(v).map(([k, val]) => `${k}:${val}`).join(";");
-export let wallKey = "";
+let wallKey = "";
 export function applyWall() {
   const mine = S.entries.filter((e) => e.user_id === S.me && idx.g[e.game_id]).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   const pick = mine.find((e) => e.status === "playing") || mine[0];

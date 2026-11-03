@@ -18,7 +18,7 @@ export function confirmDialog({ title, body, ok, danger }) {
     });
   });
 }
-export let toastTimer;
+let toastTimer;
 // action: optional { label, fn } button in the toast (e.g. Undo).
 export function toast(msg, action) {
   let t = $(".toast");

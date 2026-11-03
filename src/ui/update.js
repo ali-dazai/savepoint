@@ -1,8 +1,8 @@
 // S29: service worker registration and the "new version ready" banner.
 import { $ } from "../core/util.js";
 
-export let swReg = null;
-export function showUpdateBanner() {
+let swReg = null;
+function showUpdateBanner() {
   if ($(".update-bar")) return;
   const el = document.createElement("div");
   el.className = "update-bar"; el.setAttribute("role", "status");
