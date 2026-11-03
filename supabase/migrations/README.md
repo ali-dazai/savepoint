@@ -5,9 +5,10 @@ notes repo (`savepoint-notes/backend/`), because that history includes the setup
 placeholder. This folder holds **proposed** migrations only: SQL that has been reviewed but **not yet applied** to the
 live project. Nothing here runs automatically.
 
-| File                            | Status   | What it does                                                                                                                        |
-| ------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `20261103_harden_functions.sql` | proposed | Pins `search_path` on `touch_updated_at()`; revokes API-role `EXECUTE` on the two trigger functions. See `docs/rls-audit.md` F1–F2. |
+| File                                     | Status   | What it does                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `20261103_harden_functions.sql`          | proposed | Pins `search_path` on `touch_updated_at()`; revokes API-role `EXECUTE` on the two trigger functions. See `docs/rls-audit.md` F1–F2.                                                                                                                                                                                                                               |
+| `20261103_external_ids_and_progress.sql` | proposed | Schema for the two planned features: `game_external_ids` (Steam, IsThereAnyDeal, … per catalogue game, Steam ids backfilled), structured progress columns on `entries`, and a server-written `price_predictions` table. See `docs/ARCHITECTURE.md`. Applied twice on a local Postgres 16 with the baseline schema; access checked as member, outsider and `anon`. |
 
 ## Applying one
 
