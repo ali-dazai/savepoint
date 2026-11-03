@@ -1,136 +1,14 @@
-import { AVATAR, DAY_MS, ICON, IGDB_IMG, PLATFORMS, PLAT_FILTERS, PRECISE_DAY, SESSION_STEPS, STAR_PATH, STATUSES, STATUS_LABEL, VERB } from "./core/constants.js";
+import { registerSheet, registerTab } from "./app/registry.js";
+import { AVATAR, DAY_MS, ICON, IGDB_IMG, PLATFORMS, PLAT_FILTERS, PRECISE_DAY, SESSION_STEPS, STATUSES, STATUS_LABEL, VERB } from "./core/constants.js";
 import { S, catOf, catRow, coverUrl, groupLine, groupScore, idx, lastActivity, myEntry, nameOf, reindex, releaseInfo, verbFor } from "./core/state.js";
-import { $, addDays, ago, dateInput, daysUntil, debounce, esc, fmtDay, fmtHours, fmtNum, fmtRating, fromDateInput, hash, lsGet, lsSet, norm, parseDay, round1, safeJson, since, todayISO, took } from "./core/util.js";
+import { $, addDays, ago, dateInput, daysUntil, debounce, esc, fmtDay, fmtHours, fmtNum, fmtRating, fromDateInput, lsGet, lsSet, norm, parseDay, round1, safeJson, since, todayISO, took } from "./core/util.js";
 import { DemoApi, SupabaseApi } from "./data/api.js";
-
-// ---------------- Derived data ----------------
-// ---------------- Colour: tints taken from each game's cover ----------------
-function hexToHsl(hex) {
-  const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
-  if (!m) return null;
-  const n = parseInt(m[1], 16);
-  const r = ((n >> 16) & 255) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
-  let h = 0, s = 0;
-  if (d) {
-    s = d / (1 - Math.abs(2 * l - 1));
-    h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
-    h *= 60; if (h < 0) h += 360;
-  }
-  return [h, s, l];
-}
-const hsl = (h, s, l) => `hsl(${Math.round(h)}, ${Math.round(s * 100)}%, ${Math.round(l * 100)}%)`;
-const tintCache = new Map();
-// bg: dark panel behind a game (hero card, game page header). tile: cover placeholder. soft: readable text on either.
-function tintFrom(color, key) {
-  const k = (color || "") + "|" + key;
-  if (tintCache.has(k)) return tintCache.get(k);
-  let h, s;
-  const p = hexToHsl(color);
-  if (p) { h = p[0]; s = p[1] < 0.1 ? 0.05 : Math.min(0.45, Math.max(0.2, p[1] * 0.7)); }
-  else { h = hash(String(key)) % 360; s = 0.22; }
-  const t = { bg: hsl(h, s, 0.19), tile: hsl(h, s, 0.25), soft: hsl(h, Math.min(0.55, s + 0.12), 0.84) };
-  tintCache.set(k, t);
-  return t;
-}
-function gameTint(g) { const c = catOf(g); return tintFrom(c && c.cover_color, g.igdb_id || g.id || g.title); }
-function rowTint(r) { const c = catRow(r.igdb_id); return tintFrom((c && c.cover_color) || r.cover_color, r.igdb_id || r.name); }
-
-// ---------------- Case Wall: the wall takes a deep shade of the game you're playing ----------------
-const WALL_DEFAULT = [352, 0.38];
-function hueSat(color, key) {
-  const p = hexToHsl(color);
-  if (p) return [p[0], p[1] < 0.1 ? 0.06 : Math.min(0.5, Math.max(0.22, p[1] * 0.75))];
-  return [hash(String(key)) % 360, 0.25];
-}
-function gameHueSat(g) { const c = catOf(g); return hueSat(c && c.cover_color, g.igdb_id || g.id || g.title); }
-function wallVars(h, s) {
-  return {
-    "--bg": hsl(h, s, 0.13), "--wall-2": hsl(h, s, 0.085), "--lip": hsl(h, s * 0.9, 0.22),
-    "--s1": hsl(h, s, 0.1), "--s2": hsl(h, s * 0.85, 0.19), "--s3": hsl(h, s * 0.85, 0.25), "--sheet": hsl(h, s, 0.11),
-    "--ink": hsl(h, 0.5, 0.94), "--body": hsl(h, 0.32, 0.87), "--ink-2": hsl(h, 0.26, 0.79), "--ink-3": hsl(h, 0.16, 0.64),
-    "--on-ink": hsl(h, s, 0.12), "--sticker": hsl(h, 0.5, 0.94), "--sticker-ink": hsl(h, s, 0.12),
-  };
-}
-// The game page's manual: light paper, faintly tinted by the game.
-function manualVars(h, s) {
-  const ps = Math.min(0.3, s);
-  return {
-    "--bg": hsl(h, ps, 0.955), "--s1": hsl(h, ps, 0.915), "--s2": hsl(h, ps * 0.8, 0.89), "--s3": hsl(h, ps * 0.8, 0.83),
-    "--sheet": hsl(h, ps, 0.955), "--line": "rgba(50, 25, 25, 0.12)", "--line-2": "rgba(50, 25, 25, 0.24)",
-    "--ink": hsl(h, 0.45, 0.13), "--body": hsl(h, 0.22, 0.22), "--ink-2": hsl(h, 0.14, 0.32), "--ink-3": hsl(h, 0.1, 0.41),
-    "--on-ink": hsl(h, ps, 0.965), "--star": "#D2930F", "--star-empty": "rgba(60, 35, 30, 0.2)", "--danger": "#B3302A",
-  };
-}
-const styleVars = (v) => Object.entries(v).map(([k, val]) => `${k}:${val}`).join(";");
-let wallKey = "";
-function applyWall() {
-  const mine = S.entries.filter((e) => e.user_id === S.me && idx.g[e.game_id]).sort((a, b) => b.updated_at.localeCompare(a.updated_at));
-  const pick = mine.find((e) => e.status === "playing") || mine[0];
-  const hs = pick ? gameHueSat(idx.g[pick.game_id]) : WALL_DEFAULT;
-  const key = hs.map((x) => x.toFixed(2)).join(",");
-  if (key === wallKey) return;
-  wallKey = key;
-  const v = wallVars(hs[0], hs[1]);
-  const r = document.documentElement.style;
-  Object.entries(v).forEach(([k, val]) => r.setProperty(k, val));
-  const meta = $('meta[name="theme-color"]'); if (meta) meta.content = v["--bg"];
-}
-
-// Stickers sit in one spot on the case and say the status at a glance.
-function stickerFor(g, e) {
-  if (!e) return "";
-  if (e.status === "finished") return `<span class="stk done">Completed</span>`;
-  if (e.status === "dropped") return `<span class="stk traded">Traded in</span>`;
-  if (e.status === "paused") return `<span class="stk paused">Paused</span>`;
-  if (e.status === "want") { const rel = releaseInfo(catOf(g)); if (rel && rel.upcoming) return `<span class="stk">Out ${esc(rel.short)}</span>`; }
-  return "";
-}
-const SCUFFS = [
-  "left:3cqw;top:1.5cqw;width:11cqw;transform:rotate(-38deg)", "right:1.5cqw;bottom:7cqw;width:9cqw;transform:rotate(32deg)",
-  "right:0.4cqw;top:24cqw;width:6cqw;transform:rotate(82deg)", "left:1cqw;bottom:1.5cqw;width:9cqw;transform:rotate(44deg)",
-  "right:22cqw;bottom:0.6cqw;width:8cqw", "left:0.4cqw;top:44cqw;width:6cqw;transform:rotate(90deg)",
-];
-function wearOf(hours) { return hours >= 200 ? 3 : hours >= 100 ? 2 : hours >= 50 ? 1 : 0; }
-
-// ---------------- Building blocks ----------------
-function starSvg(cls) { return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${STAR_PATH}" fill="currentColor"/></svg>`; }
-function star(fill) {
-  return `<span class="st">${starSvg("st-empty")}<span class="st-fill" style="width:${fill * 100}%">${starSvg("")}</span></span>`;
-}
-function stars(rating, size) {
-  let out = "";
-  for (let i = 1; i <= 5; i++) out += star(rating >= i ? 1 : rating >= i - 0.5 ? 0.5 : 0);
-  return `<span class="stars" style="${size ? `--s:${size}px` : ""}" role="img" aria-label="${fmtRating(rating)} out of 5 stars">${out}</span>`;
-}
-function avatar(id, cls = "") {
-  const p = idx.p[id];
-  const col = AVATAR[((p ? p.color : 3) % 8 + 8) % 8];
-  const letter = p ? (p.display_name.trim()[0] || "?").toUpperCase() : "?";
-  return `<span class="avatar ${cls}" style="--c:${col}" aria-hidden="true">${esc(letter)}</span>`;
-}
-// A game case: the box art as its cover insert when we have it, otherwise a tinted insert with the title.
-function coverHTML({ title, url, tint, cls = "", sticker = "", sealed = false, wear = 0 }) {
-  const scuffs = SCUFFS.slice(0, wear * 2).map((st) => `<i class="scuff" style="${st}"></i>`).join("");
-  return `<span class="cv ${cls}" style="--t:${tint.tile};--tm:${tint.soft}" aria-hidden="true"><span class="art">${url
-    ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : ""}<span class="cv-t">${esc(title)}</span></span>${sealed ? `<span class="wrap"></span>` : ""}${scuffs}${sticker}</span>`;
-}
-function gameCover(g, opts = {}) {
-  return coverHTML({ title: g.title, url: coverUrl(g, opts.size || "cover_big"), tint: gameTint(g), cls: opts.cls, sticker: opts.sticker, sealed: opts.sealed, wear: opts.wear });
-}
-function rowCover(r, opts = {}) {
-  const c = catRow(r.igdb_id);
-  const img = r.cover_image_id || (c && c.cover_image_id);
-  return coverHTML({ title: r.name, url: img ? IGDB_IMG(img, opts.size || "cover_big") : "", tint: rowTint(r), cls: opts.cls, sealed: opts.sealed, sticker: opts.sticker });
-}
-function markHTML() { return `<div class="mark" aria-hidden="true"><i></i><i></i><i>${ICON.star}</i></div>`; }
-function spoilerText(e, cls) {
-  if (!e.review) return "";
-  if (e.spoiler && e.user_id !== S.me && !S.revealed.has(e.id)) {
-    return `<button type="button" class="${cls} spoiler" data-act="reveal" data-id="${e.id}"><span>Contains spoilers. Tap to show.</span></button>`;
-  }
-  return `<div class="${cls}">${e.spoiler ? '<span class="spoiler-tag">Spoilers</span> ' : ""}${esc(e.review)}</div>`;
-}
+import { avatar, gameCover, markHTML, rowCover, spoilerText, star, stars, stickerFor, wearOf } from "./ui/cover.js";
+import { busy, confirmDialog, toast } from "./ui/feedback.js";
+import { emptyState, renderMain, root, safeRenderMain, topbar } from "./ui/screen.js";
+import { closeSheet, goBack, openSheet, pageFrame, pageHead, refreshOpenSheet, renderSheet, rerenderKeepScroll, sheetFrame } from "./ui/sheet.js";
+import { gameHueSat, gameTint, hsl, hueSat, tintFrom } from "./ui/theme.js";
+import { applyUpdate, checkForUpdate, registerServiceWorker } from "./ui/update.js";
 
 // ---------------- S26: taste match + picks ----------------
 // Agreement between you and a friend over games you've both rated: 100% = identical ratings.
@@ -251,8 +129,6 @@ function findRow(igdbId) {
 }
 
 // ---------------- Screens: boot / auth ----------------
-const root = () => $("#app");
-const layer = () => $("#layer");
 
 function renderLoading() {
   root().innerHTML = `<div class="loading" role="status" aria-label="Loading">${markHTML()}</div>`;
@@ -426,40 +302,6 @@ async function loadDiscover(force) {
 }
 
 // ---------------- Main screens ----------------
-const TABS = [
-  { id: "feed", label: "Feed" },
-  { id: "shelf", label: "Shelf" },
-  { id: "discover", label: "Discover" },
-  { id: "friends", label: "Friends" },
-];
-function renderMain() {
-  const keepScroll = window.scrollY;
-  applyWall();
-  const body = S.tab === "shelf" ? shelfView() : S.tab === "friends" ? friendsView() : S.tab === "discover" ? discoverView() : feedView();
-  root().innerHTML = `
-    <div class="ptr" id="ptr" aria-hidden="true"><span>Pull to refresh</span></div>
-    <main class="screen" id="main">
-      ${S.api.demo ? `<div class="demo-bar"><span>Demo mode: changes stay on this device.</span><button data-act="exit-demo">Exit demo</button></div>` : ""}
-      ${body}
-    </main>
-    <nav class="tabbar" aria-label="Sections"><div class="tabbar-inner">
-      ${TABS.map((t) => `<button data-act="tab" data-tab="${t.id}" aria-label="${t.label}" ${S.tab === t.id ? 'aria-current="page"' : ""}>${ICON[t.id]}<span>${t.label}</span></button>`).join("")}
-    </div></nav>`;
-  window.scrollTo(0, keepScroll);
-}
-// Re-render without yanking the keyboard away from someone typing in a search box.
-function safeRenderMain() {
-  // Background updates only refresh the main screens; they must never cover sign-in (e.g. demo data arriving after Exit demo).
-  if (!S.me || !$("#main")) return;
-  const a = document.activeElement;
-  if (a && a.closest && a.closest("#main") && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return;
-  renderMain();
-}
-
-function topbar(title, add = true) {
-  return `<header class="topbar"><h1 class="big-title">${esc(title)}</h1>
-    ${add ? `<button class="btn round" data-act="add-game" aria-label="Add a game">${ICON.plus}</button>` : ""}</header>`;
-}
 
 function feedView() {
   const playing = S.entries
@@ -553,11 +395,6 @@ function feedItem(e, fresh) {
       ${spoilerText(e, "quote")}
     </div>
   </li>`;
-}
-
-function emptyState(title, body, cta) {
-  return `<div class="empty">${markHTML()}<h3>${esc(title)}</h3><p>${esc(body)}</p>
-    ${cta ? `<button class="btn" data-act="add-game">${esc(cta)}</button>` : ""}</div>`;
 }
 
 function shelfGames() {
@@ -853,102 +690,6 @@ function friendsView() {
 
 // ---------------- Sheets & pages ----------------
 // push: remember the current sheet so Back returns to it (e.g. friend > game, game > share).
-function openSheet(sheet, push) {
-  S.back = push && S.sheet ? S.sheet : null;
-  if (S.share && sheet.kind !== "share") { try { if (S.share.url) URL.revokeObjectURL(S.share.url); } catch (_) {} S.share = null; }
-  S.sheet = sheet;
-  renderSheet();
-  if (sheet.kind === "game") { const g = idx.g[sheet.id]; if (g && g.igdb_id != null) ensureSteam(g.igdb_id); }
-  if (sheet.kind === "ext") loadExt(sheet);
-}
-function closeSheet() {
-  if (S.share && S.share.url) { try { URL.revokeObjectURL(S.share.url); } catch (_) {} }
-  S.share = null;
-  S.sheet = null; S.draft = null; S.back = null;
-  layer().innerHTML = "";
-  document.body.style.overflow = "";
-}
-function goBack() {
-  if (!S.back) return closeSheet();
-  const b = S.back;
-  S.back = null; S.draft = null;
-  openSheet(b, false);
-}
-function refreshOpenSheet() {
-  if (!S.sheet) return;
-  if (S.sheet.kind === "game") {
-    if (!idx.g[S.sheet.id]) return closeSheet();
-    const box = $("#others"); if (box) box.innerHTML = othersReviews(S.sheet.id);
-    updatePageChips();
-    const sess = $("#sessions"); const mine = myEntry(S.sheet.id);
-    if (sess && mine && mine.status !== "want") sess.innerHTML = sessionsHTML(mine);
-  } else if (S.sheet.kind === "ext") {
-    const g = idx.byIgdb[S.sheet.igdb];
-    if (g) { S.draft = null; openSheet({ kind: "game", id: g.id }, false); }
-  } else if (S.sheet.kind === "friend") {
-    renderSheet();
-  }
-}
-function sheetFrame(title, inner, label) {
-  return `<div class="backdrop" data-act="backdrop">
-    <div class="sheet" role="dialog" aria-modal="true" aria-label="${esc(label || title)}">
-      <div class="grabber"></div>
-      <div class="sheet-head"><h2>${esc(title)}</h2><button class="btn round secondary" data-act="close" aria-label="Close">${ICON.close}</button></div>
-      ${inner}
-    </div></div>`;
-}
-// A game page: the header is the opened case (disc in the tray), the body is the manual, a light paper sheet.
-function pageFrame(label, head, body, { tint, hs }) {
-  const opening = S.sheet && !S.sheet.opened;
-  if (S.sheet) S.sheet.opened = true;
-  return `<div class="page${opening ? " opening" : ""}" role="dialog" aria-modal="true" aria-label="${esc(label)}" style="--hb:${tint.bg};--hm:${tint.soft}">
-    <div class="page-inner">${head}<div class="booklet" style="${styleVars(manualVars(hs[0], hs[1]))}"><div class="g-body">${body}</div></div></div></div>`;
-}
-function caseHead({ url, tint, title }) {
-  const img = url ? `<img src="${esc(url)}" alt="" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
-  const name = `<span class="cv-t">${esc(title)}</span>`;
-  return `<div class="open-case" aria-hidden="true" style="--t:${tint.tile};--tm:${tint.soft}">
-    <div class="tray"><div class="disc"><div class="label">${img || name}</div><span class="hub"></span></div></div>
-    <div class="lid">
-      <div class="face back"><span class="clip" style="top:9%"></span><span class="clip" style="bottom:9%"></span><div class="ins">${img}</div></div>
-      <div class="face front"><div class="ins">${img || name}</div></div>
-    </div>
-  </div>`;
-}
-function pageHead({ title, art, meta, chips, right }) {
-  return `<header class="g-head">
-    <div class="g-nav"><button class="btn round glass" data-act="close" aria-label="Back">${ICON.back}</button>${right || ""}</div>
-    ${caseHead(art)}
-    <div><h1>${esc(title)}</h1>${meta ? `<div class="g-meta">${esc(meta)}</div>` : ""}</div>
-    <div id="chips">${chips}</div>
-  </header>`;
-}
-function renderSheet() {
-  const sh = S.sheet;
-  if (!sh) return;
-  let html = "";
-  if (sh.kind === "game") html = gamePage(sh.id);
-  else if (sh.kind === "ext") html = extPage(sh);
-  else if (sh.kind === "add") html = addSheet(sh);
-  else if (sh.kind === "edit") html = editSheet(sh.id);
-  else if (sh.kind === "friend") html = friendSheet(sh.id);
-  else if (sh.kind === "finish") html = finishSheet(sh.id);
-  else if (sh.kind === "share") html = shareSheet(sh.id);
-  layer().innerHTML = html;
-  document.body.style.overflow = "hidden";
-  const pg = $(".page.opening"); // the case-opening plays once; its end state is the page's resting state
-  if (pg) setTimeout(() => pg.classList.remove("opening"), 900);
-  const first = $("#layer [autofocus]");
-  if (first && !matchMedia("(pointer: coarse)").matches) first.focus();
-}
-function scroller() { return $(".page") || $(".sheet"); }
-function rerenderKeepScroll() {
-  const el = scroller();
-  const top = el ? el.scrollTop : 0;
-  renderSheet();
-  const el2 = scroller(); if (el2) el2.scrollTop = top;
-}
-
 // Score chips on a game page: friends, critics, Steam, release date.
 function scoreChips(c, sc) {
   const chip = (big, label) => `<div class="score-chip"><b>${esc(big)}</b><span>${esc(label)}</span></div>`;
@@ -1510,40 +1251,6 @@ async function drawShareCard(gameId, includeReview) {
 }
 
 // ---------------- Dialog & toast ----------------
-function confirmDialog({ title, body, ok, danger }) {
-  return new Promise((resolve) => {
-    const el = document.createElement("div");
-    el.className = "backdrop";
-    el.style.alignItems = "center";
-    el.style.zIndex = "50";
-    el.innerHTML = `<div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="dlg-t">
-      <h2 id="dlg-t">${esc(title)}</h2><p>${esc(body)}</p>
-      <div class="row"><button class="btn secondary" data-r="0">Cancel</button><button class="btn" data-r="1" style="${danger ? "background:var(--danger);color:#000" : ""}">${esc(ok)}</button></div></div>`;
-    document.body.appendChild(el);
-    el.querySelector('[data-r="1"]').focus();
-    el.addEventListener("click", (ev) => {
-      const b = ev.target.closest("[data-r]");
-      if (b || ev.target === el) { el.remove(); resolve(!!(b && b.dataset.r === "1")); }
-    });
-  });
-}
-let toastTimer;
-// action: optional { label, fn } button in the toast (e.g. Undo).
-function toast(msg, action) {
-  let t = $(".toast");
-  if (!t) { t = document.createElement("div"); t.setAttribute("role", "status"); document.body.appendChild(t); }
-  t.className = "toast" + (action ? "" : " plain");
-  t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button type="button">${esc(action.label)}</button>` : ""}`;
-  if (action) t.querySelector("button").addEventListener("click", () => { clearTimeout(toastTimer); t.remove(); action.fn(); });
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.remove(), action ? 4500 : 2400);
-}
-
-async function busy(btn, fn) {
-  if (btn) { btn.disabled = true; }
-  try { return await fn(); }
-  finally { if (btn && btn.isConnected) btn.disabled = false; }
-}
 
 // ---------------- Actions ----------------
 const actions = {
@@ -2037,7 +1744,7 @@ document.addEventListener("keydown", (ev) => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") { if (S.me) lsSet("sp-seen", new Date().toISOString()); return; }
   if (S.me && Date.now() - S.lastLoad > 20000) reload().catch(() => {});
-  if (swReg) swReg.update().catch(() => {});
+  checkForUpdate();
 });
 window.addEventListener("pagehide", () => { if (S.me) lsSet("sp-seen", new Date().toISOString()); });
 
@@ -2137,20 +1844,6 @@ function updatePtr(dy, label) {
   el.firstElementChild.textContent = label || (dy > 70 ? "Release to refresh" : "Pull to refresh");
 }
 
-// ---------------- S29: update banner ----------------
-let swReg = null;
-function showUpdateBanner() {
-  if ($(".update-bar")) return;
-  const el = document.createElement("div");
-  el.className = "update-bar"; el.setAttribute("role", "status");
-  el.innerHTML = `<span>A new version of Save Point is ready.</span><button class="btn" data-act="update-refresh">Refresh</button>`;
-  document.body.appendChild(el);
-}
-function applyUpdate() {
-  if (swReg && swReg.waiting) swReg.waiting.postMessage({ type: "SKIP_WAITING" });
-  else location.reload();
-}
-
 // ---------------- Start ----------------
 async function start() {
   renderLoading();
@@ -2173,20 +1866,33 @@ async function start() {
   afterSignIn();
 }
 
-start();
+// ---------------- Register the features with the shell ----------------
+registerTab({ id: "feed", label: "Feed", view: feedView });
+registerTab({ id: "shelf", label: "Shelf", view: shelfView });
+registerTab({ id: "discover", label: "Discover", view: discoverView });
+registerTab({ id: "friends", label: "Friends", view: friendsView });
 
-if ("serviceWorker" in navigator && location.protocol === "https:") {
-  let reloading = false;
-  navigator.serviceWorker.addEventListener("controllerchange", () => { if (!reloading) { reloading = true; location.reload(); } });
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").then((reg) => {
-      swReg = reg;
-      if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner();
-      reg.addEventListener("updatefound", () => {
-        const w = reg.installing;
-        if (!w) return;
-        w.addEventListener("statechange", () => { if (w.state === "installed" && navigator.serviceWorker.controller) showUpdateBanner(); });
-      });
-    }).catch(() => {});
-  });
-}
+registerSheet("game", {
+  render: (sh) => gamePage(sh.id),
+  onOpen(sh) { const g = idx.g[sh.id]; if (g && g.igdb_id != null) ensureSteam(g.igdb_id); },
+  refresh(sh) {
+    if (!idx.g[sh.id]) return closeSheet();
+    const box = $("#others"); if (box) box.innerHTML = othersReviews(sh.id);
+    updatePageChips();
+    const sess = $("#sessions"); const mine = myEntry(sh.id);
+    if (sess && mine && mine.status !== "want") sess.innerHTML = sessionsHTML(mine);
+  },
+});
+registerSheet("ext", {
+  render: (sh) => extPage(sh),
+  onOpen: (sh) => loadExt(sh),
+  refresh(sh) { const g = idx.byIgdb[sh.igdb]; if (g) { S.draft = null; openSheet({ kind: "game", id: g.id }, false); } },
+});
+registerSheet("add", { render: (sh) => addSheet(sh) });
+registerSheet("edit", { render: (sh) => editSheet(sh.id) });
+registerSheet("friend", { render: (sh) => friendSheet(sh.id), refresh: () => renderSheet() });
+registerSheet("finish", { render: (sh) => finishSheet(sh.id) });
+registerSheet("share", { render: (sh) => shareSheet(sh.id) });
+
+start();
+registerServiceWorker();

@@ -3,7 +3,9 @@
 const VERSION = "savepoint-v9";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./config.js",
-  "./src/main.js", "./src/data/api.js", "./src/core/constants.js", "./src/core/state.js", "./src/core/util.js",
+  "./src/main.js", "./src/app/registry.js", "./src/data/api.js",
+  "./src/core/constants.js", "./src/core/state.js", "./src/core/util.js",
+  "./src/ui/cover.js", "./src/ui/feedback.js", "./src/ui/screen.js", "./src/ui/sheet.js", "./src/ui/theme.js", "./src/ui/update.js",
   "./vendor/supabase.js", "./manifest.webmanifest",
   "./fonts/funnel-sans-latin.woff2", "./fonts/funnel-sans-latin-ext.woff2", "./fonts/funnel-sans-latin-italic.woff2",
   "./fonts/funnel-display-latin.woff2", "./fonts/funnel-display-latin-ext.woff2",
