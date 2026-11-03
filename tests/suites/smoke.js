@@ -126,7 +126,7 @@ const DEMO_KEY = "savepoint-demo-v4";
   check("game page: save toast: " + (await toast()), /Changes saved/.test(await toast()));
   await page.waitForTimeout(400);
   let db = await demoDb();
-  let astro = db.entries.find((e) => e.user_id === "demo-me" && e.game_id === "g8");
+  const astro = db.entries.find((e) => e.user_id === "demo-me" && e.game_id === "g8");
   check(
     "save persisted rating/hours/review",
     astro.rating === 3 && astro.hours === 16 && astro.review === "Still a delight on a second run.",
