@@ -48,7 +48,7 @@ src/
     feedback.js      confirm dialog, toast, busy
     update.js        service worker registration and the update banner
   features/<name>/   one folder per feature; views/sheets/pages plus actions.js
-    auth/ feed/ shelf/ discover/ friends/ game/ catalog/ picks/ share/
+    auth/ feed/ shelf/ discover/ friends/ game/ catalog/ picks/ share/ account/
 tests/
   unit/              node:test suites for the pure modules (npm run test:unit)
   run.js, suites/    Playwright suites against a local copy of the site (npm run test:e2e)
