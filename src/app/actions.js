@@ -1,5 +1,5 @@
 // Actions that belong to the shell itself rather than a feature: tabs, closing sheets, the update banner.
-import { reload } from "./reload.js";
+import { reloadQuietly } from "./reload.js";
 import { tabs } from "../core/registry.js";
 import { S } from "../core/state.js";
 import { lsSet } from "../core/util.js";
@@ -14,7 +14,7 @@ export const shellActions = {
     // Re-tapping the current tab scrolls to the top and refreshes.
     if (S.tab === t) {
       window.scrollTo({ top: 0, behavior: "smooth" });
-      reload().catch(() => {});
+      reloadQuietly();
       if (tab.onReselect) tab.onReselect();
       return;
     }

@@ -20,3 +20,9 @@ export async function reload() {
   maintainCatalog();
   if (S.tab === "discover") loadDiscover();
 }
+
+// For background refreshes (live updates, coming back to the app, re-tapping a tab): a failed load, e.g. while
+// offline, keeps the screen as it is instead of surfacing as an unhandled promise rejection.
+export function reloadQuietly() {
+  return reload().catch(() => {});
+}
