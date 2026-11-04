@@ -22,10 +22,16 @@ const MOHD = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
         .innerText()
         .catch(() => "")
     ).replace(/\s+/g, " ");
-  const toast = async () => {
-    await page.waitForSelector(".toast", { timeout: 3000 }).catch(() => {});
-    return text(".toast");
-  };
+  // Waits for a toast saying this (an earlier toast may still be on screen, so don't just read the current one).
+  const toastSays = (re) =>
+    page
+      .waitForFunction(
+        (src) => [...document.querySelectorAll(".toast")].some((t) => new RegExp(src).test(t.textContent)),
+        re.source,
+        { timeout: 4000 },
+      )
+      .then(() => true)
+      .catch(() => false);
 
   const now = new Date().toISOString();
   const users = {
@@ -135,7 +141,7 @@ const MOHD = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
   );
   await page.fill(`${form} input[name=confirm]`, "new-secret-1");
   await page.click(`${form} button[type=submit]`);
-  check("Change password: saved (toast)", /Password changed/.test(await toast()));
+  check("Change password: saved (toast)", await toastSays(/Password changed/));
   check(
     "Change password: PUT /auth/v1/user with the password and the flag cleared",
     puts.length === 1 &&
@@ -166,7 +172,7 @@ const MOHD = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
   );
   check("temporary password shown", (await text(".temp-pw")) === "k7qm-3xvp-9tnr" && /Mohd/.test(await text(".sheet")));
   await page.click("[data-act=copy-temp-password]");
-  check("Copy: toast", /Password copied/.test(await toast()));
+  check("Copy: toast", await toastSays(/Password copied/));
   check("Copy: on the clipboard", (await page.evaluate(() => navigator.clipboard.readText())) === "k7qm-3xvp-9tnr");
   await page.click(".sheet [data-act=close]");
   await page.waitForSelector(".sheet .friend-head");
@@ -181,7 +187,7 @@ const MOHD = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
   await page.click('.dialog [data-r="1"]');
   check(
     "server refusal shows its reason",
-    /Only the group admin can reset passwords/.test(await toast()) && (await page.locator(".temp-pw").count()) === 0,
+    (await toastSays(/Only the group admin can reset passwords/)) && (await page.locator(".temp-pw").count()) === 0,
   );
   await page.click(".sheet [data-act=close]");
 
