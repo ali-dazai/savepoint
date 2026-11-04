@@ -5,6 +5,7 @@ import { fmtDay, storedChoice, todayISO } from "./util.js";
 export const S = {
   api: null,
   me: null,
+  email: null, // the signed-in account's email, for password managers on the change-password forms
   profiles: [],
   games: [],
   entries: [],

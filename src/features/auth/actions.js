@@ -4,6 +4,7 @@ import { reload } from "../../app/reload.js";
 import { S } from "../../core/state.js";
 import { esc, lsSet } from "../../core/util.js";
 import { afterSignIn, renderAuth } from "./screens.js";
+import { FORGOT_PASSWORD_MSG, newPasswordError } from "../account/password.js";
 import { confirmDialog, toast } from "../../ui/feedback.js";
 import { closeSheet } from "../../ui/sheet.js";
 
@@ -15,6 +16,9 @@ export const authActions = {
     S.me = null;
     closeSheet();
     renderAuth("signin");
+  },
+  "forgot-password"() {
+    renderAuth("signin", FORGOT_PASSWORD_MSG);
   },
   "auth-mode"(el) {
     renderAuth(el.dataset.mode);
@@ -73,6 +77,14 @@ export const authForms = {
         `We sent a confirmation link to <b>${esc(email)}</b>. Open it, then come back here and sign in.`,
       );
     }
+    await afterSignIn();
+  },
+  // The screen after signing in with a temporary password.
+  async "new-password"(f) {
+    const problem = newPasswordError(f.password.value, f.confirm.value);
+    if (problem) throw new Error(problem);
+    await S.api.changePassword(f.password.value);
+    toast("Password saved");
     await afterSignIn();
   },
   async join(f) {

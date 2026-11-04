@@ -5,6 +5,7 @@ import { esc } from "../../core/util.js";
 import { taste } from "../picks/picks.js";
 import { avatar, gameCover } from "../../ui/cover.js";
 import { topbar } from "../../ui/screen.js";
+import { changePasswordPanel } from "../account/password.js";
 
 export function friendStats(id) {
   const es = S.entries.filter((e) => e.user_id === id);
@@ -63,6 +64,7 @@ export function friendsView() {
         <button class="btn secondary" type="submit">Save name</button>
       </form>
     </section>
+    ${changePasswordPanel()}
     <section class="panel" aria-labelledby="inv-h">
       <h2 class="section-title" id="inv-h">Invite friends</h2>
       <p class="subtle" style="margin-top:0">Send them this link and your group's invite code. They create an account and they're in.</p>

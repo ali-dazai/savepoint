@@ -23,6 +23,9 @@ _Demo data shows title-only cases; real games get their cover art from IGDB._
 - **Catalogue**: add games by searching IGDB; covers, platforms, genres, summary and critic score fill themselves
   in. Adding by hand still works.
 - **Share**: your review as a 1080×1350 image, drawn in the browser.
+- **Passwords**: anyone can change theirs under Your profile. Forgot it? The group admin opens your page under
+  Friends, taps Reset password and sends you a temporary one; you choose your own when you sign in with it. No
+  email setup needed.
 - **Demo mode**: `?demo` (or "Try the demo" on the sign-in screen) runs the whole app on sample data in your
   browser, no account needed.
 

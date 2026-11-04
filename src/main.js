@@ -7,6 +7,8 @@ import { wireEvents } from "./app/wiring.js";
 import { registerActions, registerForms, registerSheet, registerTab } from "./core/registry.js";
 import { S, idx, myEntry } from "./core/state.js";
 import { $ } from "./core/util.js";
+import { accountActions, accountForms } from "./features/account/actions.js";
+import { tempPasswordSheet } from "./features/account/admin.js";
 import { authActions, authForms } from "./features/auth/actions.js";
 import { catalogActions, catalogForms } from "./features/catalog/actions.js";
 import { addSheet } from "./features/catalog/sheet.js";
@@ -77,6 +79,7 @@ registerSheet("edit", { render: (sh) => editSheet(sh.id) });
 registerSheet("friend", { render: (sh) => friendSheet(sh.id), refresh: () => renderSheet() });
 registerSheet("finish", { render: (sh) => finishSheet(sh.id) });
 registerSheet("share", { render: (sh) => shareSheet(sh.id) });
+registerSheet("temp-password", { render: tempPasswordSheet });
 
 // data-act and data-form handlers.
 registerActions(shellActions);
@@ -87,10 +90,12 @@ registerActions(friendsActions);
 registerActions(gameActions);
 registerActions(catalogActions);
 registerActions(shareActions);
+registerActions(accountActions);
 registerForms(authForms);
 registerForms(friendsForms);
 registerForms(gameForms);
 registerForms(catalogForms);
+registerForms(accountForms);
 
 wireEvents();
 wireGestures();

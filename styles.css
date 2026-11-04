@@ -2669,3 +2669,25 @@ input[type="date"].input {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Account: the admin's temporary password for a friend. Monospace so similar-looking characters can be told apart. */
+.temp-pw {
+  margin: 16px 0;
+  padding: 18px 12px;
+  border-radius: 14px;
+  background: var(--s2);
+  color: var(--ink);
+  font:
+    600 26px/1.2 ui-monospace,
+    "SF Mono",
+    Menlo,
+    Consolas,
+    monospace;
+  letter-spacing: 0.06em;
+  text-align: center;
+  -webkit-user-select: all;
+  user-select: all;
+}
+.admin-panel {
+  margin-top: 28px;
+}

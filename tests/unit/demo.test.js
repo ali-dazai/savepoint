@@ -23,7 +23,7 @@ describe("DemoApi", () => {
     });
     it("session and isMember describe the demo user", async () => {
       const api = new DemoApi();
-      assert.deepEqual(await api.session(), { userId: ME, email: "demo@example.com" });
+      assert.deepEqual(await api.session(), { userId: ME, email: "demo@example.com", mustChangePassword: false });
       assert.equal(await api.isMember(), true);
     });
     it("updateProfile changes display_name", async () => {
