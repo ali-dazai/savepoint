@@ -1,5 +1,6 @@
-# Runs on every push and pull request: lint the code, then click through the app in a phone-sized browser.
-name: Tests
+# Runs on every push to main and every pull request: lint and format check, unit tests, then click through the app
+# in a phone-sized browser (demo data + a mocked Supabase; no secrets, no live database).
+name: CI
 on:
   push:
     branches: [main]
@@ -7,8 +8,36 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  test:
+  lint:
+    name: Lint and format
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:unit
+  e2e:
+    name: Browser tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -18,12 +47,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Lint (Biome)
-        run: npx biome lint
       - name: Install the test browser
         run: npx playwright install --with-deps chromium
-      - name: Run the app tests (demo data + mocked Supabase)
-        run: npm test
+      - name: Run the Playwright suites (smoke, regression, picks/share, discover, live path)
+        run: npm run test:e2e
       - name: Keep screenshots if something failed
         if: failure()
         uses: actions/upload-artifact@v7

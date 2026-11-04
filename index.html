@@ -1,34 +1,33 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Save Point</title>
-  <meta name="description" content="A shared game log for you and your friends.">
-  <meta name="theme-color" content="#2A1418">
-  <meta name="color-scheme" content="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Save Point</title>
+    <meta name="description" content="A shared game log for you and your friends." />
+    <meta name="theme-color" content="#2A1418" />
+    <meta name="color-scheme" content="dark" />
 
-  <!-- Home-screen app settings -->
-  <link rel="manifest" href="./manifest.webmanifest">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Save Point">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <link rel="apple-touch-icon" href="./icons/icon-180.png">
-  <link rel="icon" type="image/png" href="./icons/favicon-64.png">
+    <!-- Home-screen app settings -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Save Point" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="./icons/icon-180.png" />
+    <link rel="icon" type="image/png" href="./icons/favicon-64.png" />
 
-  <link rel="preload" href="./fonts/funnel-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="./fonts/funnel-display-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="./styles.css">
-</head>
-<body style="background:#2A1418">
-  <div id="app"></div>
-  <div id="layer"></div>
-  <noscript><p style="padding:24px">Save Point needs JavaScript turned on.</p></noscript>
+    <link rel="preload" href="./fonts/funnel-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="./fonts/funnel-display-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body style="background: #2a1418">
+    <div id="app"></div>
+    <div id="layer"></div>
+    <noscript><p style="padding: 24px">Save Point needs JavaScript turned on.</p></noscript>
 
-  <script src="./config.js"></script>
-  <script src="./vendor/supabase.js"></script>
-  <script src="./api.js"></script>
-  <script src="./app.js"></script>
-</body>
+    <script src="./config.js"></script>
+    <script src="./vendor/supabase.js"></script>
+    <script type="module" src="./src/main.js"></script>
+  </body>
 </html>
