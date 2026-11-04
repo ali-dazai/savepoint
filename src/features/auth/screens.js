@@ -1,5 +1,5 @@
 // Sign-in, create account, join group, not-configured and error screens, and the after-sign-in flow.
-import { reload } from "../../app/reload.js";
+import { reload, reloadQuietly } from "../../app/reload.js";
 import { S } from "../../core/state.js";
 import { debounce, esc, lsGet, lsSet, safeJson } from "../../core/util.js";
 import { markHTML } from "../../ui/cover.js";
@@ -76,7 +76,7 @@ export async function afterSignIn() {
     lsSet("sp-pending", null);
     if (!S.seenAt) S.seenAt = lsGet("sp-seen") || new Date().toISOString();
     await reload();
-    S.api.subscribe(debounce(() => reload(), 600));
+    S.api.subscribe(debounce(reloadQuietly, 600));
   } catch (e) {
     renderError(e.message);
   }

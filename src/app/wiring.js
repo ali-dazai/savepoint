@@ -1,6 +1,6 @@
 // One delegated listener per event type on document. Clicks go to data-act handlers, submits to data-form handlers.
 import { swallowHoldClick } from "./gestures.js";
-import { reload } from "./reload.js";
+import { reloadQuietly } from "./reload.js";
 import { actions, forms } from "../core/registry.js";
 import { S } from "../core/state.js";
 import { $, debounce, esc, lsSet, norm } from "../core/util.js";
@@ -84,7 +84,7 @@ export function wireEvents() {
       if (S.me) lsSet("sp-seen", new Date().toISOString());
       return;
     }
-    if (S.me && Date.now() - S.lastLoad > 20000) reload().catch(() => {});
+    if (S.me && Date.now() - S.lastLoad > 20000) reloadQuietly();
     checkForUpdate();
   });
   window.addEventListener("resize", debounce(relayoutShelf, 150));

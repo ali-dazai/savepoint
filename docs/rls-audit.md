@@ -3,8 +3,8 @@
 **Date:** 2026-11-03 · **Project:** Supabase `evkzdabyyxbtchqtebfr` (eu-west-1, Postgres 17) · **Method:** read-only. The
 SQL files in the private notes repo were compared with the live catalog (`pg_class`, `pg_policies`,
 `information_schema.role_table_grants` / `role_column_grants`, `pg_proc`, `pg_default_acl`) and with Supabase's
-security advisor. Nothing was changed. Proposed fixes are in [`supabase/migrations/`](../supabase/migrations/) and
-are **not applied**.
+security advisor. Nothing was changed during the audit. SQL for the fixes is kept in the private notes repo; F1–F2 were
+**applied on 2026-11-05** (migration `harden_functions`).
 
 ## Verdict
 
@@ -35,28 +35,27 @@ never connects as, so it is fine.
 | `is_member()`                  | yes          | yes                  | `authenticated`                   | ✅ intended (it is what every policy gates on)                                                                          |
 | `join_group(code, name)`       | yes          | yes                  | `authenticated`                   | ✅ intended; the only way into `profiles`                                                                               |
 | `add_hours(entry, delta)`      | no (invoker) | yes                  | `authenticated`                   | ✅ RLS still applies; clamps delta to ±100                                                                              |
-| `entry_dates()` (trigger)      | no           | yes                  | `anon`, `authenticated` (default) | ⚠️ hygiene, see F2                                                                                                      |
-| `touch_updated_at()` (trigger) | no           | **no**               | `anon`, `authenticated` (default) | ⚠️ advisor warning, see F1                                                                                              |
+| `entry_dates()` (trigger)      | no           | yes                  | `anon`, `authenticated` (default) | ✅ fixed 2026-11-05 (F2)                                                                                                |
+| `touch_updated_at()` (trigger) | no           | **no**               | `anon`, `authenticated` (default) | ✅ fixed 2026-11-05 (F1)                                                                                                |
 | `rls_auto_enable()`            | yes          | yes                  | `anon`, `authenticated`           | Supabase's own helper, not ours. Postgres refuses to run event-trigger functions directly, so it is harmless. Leave it. |
 
 ## Findings
 
 **F1 — `touch_updated_at()` has a mutable `search_path`** (advisor `function_search_path_mutable`, WARN). It is not
 `security definer` and only ever runs as a trigger, so the practical risk is nil, but pinning it costs nothing and
-clears the warning. Fix: `alter function public.touch_updated_at() set search_path = public;` (in the proposed
-migration).
+clears the warning. **Fixed 2026-11-05** (`search_path` pinned).
 
 **F2 — trigger functions are executable by `anon` and `authenticated`.** Postgres grants `EXECUTE` to `PUBLIC` on
 new functions by default, and this project's default ACL also grants it to `anon`/`authenticated` explicitly.
 Trigger functions can't be called through PostgREST (they return `trigger`), so again no practical exposure, but
-revoking keeps the "nothing is callable unless we said so" rule true. Fix in the proposed migration.
+revoking keeps the "nothing is callable unless we said so" rule true. **Fixed 2026-11-05.**
 
 **F3 — default privileges for future objects.** `pg_default_acl` shows that every new table, sequence and function
 in `public` is granted to `anon` and `authenticated` automatically (Supabase's default). New tables get RLS turned
 on by Supabase's `rls_auto_enable` event trigger, so they deny by default, but **new functions are callable by
 anyone** until revoked. Every future migration (price predictions, guide) must therefore end with explicit
 `revoke all on <table> from anon, authenticated` and `revoke all on function <fn> from public, anon` lines, as the
-existing ones do. The template in `supabase/migrations/README.md` says so.
+existing ones do. The migration template in the private notes repo says so.
 
 **F4 — a game whose adder leaves becomes undeletable.** `games.added_by` is `on delete set null`, and the only
 delete policy is `added_by = auth.uid()`. Low impact (Ali can delete rows in the dashboard). Options if it ever

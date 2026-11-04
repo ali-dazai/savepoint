@@ -1,5 +1,5 @@
 // S17/S18: saving a log instantly with rollback, serialised per game; quick sessions via the add_hours RPC.
-import { reload } from "../../app/reload.js";
+import { reload, reloadQuietly } from "../../app/reload.js";
 import { S, idx, myEntry, reindex } from "../../core/state.js";
 import { $, debounce, fmtHours, fromDateInput } from "../../core/util.js";
 import { toast } from "../../ui/feedback.js";
@@ -20,7 +20,7 @@ export function syncDraftFromForm() {
 }
 
 // ---------------- S18: instant saves ----------------
-export const syncSoon = debounce(() => reload().catch(() => {}), 1500);
+export const syncSoon = debounce(reloadQuietly, 1500);
 
 export function applyLocalEntry(gameId, fields) {
   const now = new Date().toISOString();
