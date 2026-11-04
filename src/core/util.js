@@ -8,6 +8,11 @@ export function lsGet(k) {
     return null;
   }
 }
+// A remembered choice, only if it is still one of the allowed values (an old or hand-edited value falls back).
+export function storedChoice(key, allowed, fallback) {
+  const v = lsGet(key);
+  return allowed.includes(v) ? v : fallback;
+}
 export function lsSet(k, v) {
   try {
     v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v);

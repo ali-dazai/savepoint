@@ -1,6 +1,6 @@
 // The single app state object `S`, the index `idx` rebuilt from it, and the derived lookups every screen uses.
-import { IGDB_IMG, MY_VERB, PRECISE_DAY, VERB } from "./constants.js";
-import { fmtDay, lsGet, todayISO } from "./util.js";
+import { IGDB_IMG, MY_VERB, PLAT_FILTERS, PRECISE_DAY, VERB } from "./constants.js";
+import { fmtDay, storedChoice, todayISO } from "./util.js";
 
 export const S = {
   api: null,
@@ -9,11 +9,11 @@ export const S = {
   games: [],
   entries: [],
   catalog: [],
-  tab: ["feed", "shelf", "discover", "friends"].includes(lsGet("sp-tab")) ? lsGet("sp-tab") : "feed",
-  scope: lsGet("sp-scope") || "mine",
+  tab: storedChoice("sp-tab", ["feed", "shelf", "discover", "friends"], "feed"),
+  scope: storedChoice("sp-scope", ["mine", "all"], "mine"),
   status: "all",
   search: "",
-  sort: lsGet("sp-sort") || "recent",
+  sort: storedChoice("sp-sort", ["recent", "rated", "az"], "recent"),
   sheet: null, // the open sheet or page: { kind, ... }
   back: null, // where the back button goes from the open sheet/page
   draft: null,
@@ -25,8 +25,12 @@ export const S = {
   similar: null, // S26: { key, games } IGDB games similar to ones you loved
   share: null, // S27: { gameId, include, url, blob, busy }
   disc: null, // S33/S34: { data: { trending, upcoming, has_history }, at, error }
-  discView: lsGet("sp-disc-view") === "calendar" ? "calendar" : "trending",
-  plat: lsGet("sp-plat") || "all",
+  discView: storedChoice("sp-disc-view", ["trending", "calendar"], "trending"),
+  plat: storedChoice(
+    "sp-plat",
+    PLAT_FILTERS.map((p) => p.id),
+    "all",
+  ),
   ext: {}, // full catalogue rows for games that aren't on the shelf (opened from Discover/picks)
   refreshed: new Set(), // catalogue rows already refreshed this session
   steamTried: new Set(), // S35: Steam lookups already done this session
