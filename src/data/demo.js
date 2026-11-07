@@ -47,7 +47,7 @@ export function demoRow(g) {
 }
 export function seed() {
   const P = [
-    { id: ME, display_name: "Sam", color: 3 },
+    { id: ME, display_name: "Sam", color: 3, is_admin: true }, // the demo "you" runs the group, so the admin tools show
     { id: "demo-maya", display_name: "Maya", color: 0 },
     { id: "demo-jon", display_name: "Jon", color: 2 },
     { id: "demo-priya", display_name: "Priya", color: 4 },
@@ -323,6 +323,9 @@ export class DemoApi {
       this.db = null;
     }
     if (!this.db || !this.db.games) this.db = seed();
+    // Demo data saved before admins existed: make "you" the admin rather than resetting everyone's demo.
+    const me = this.db.profiles.find((p) => p.id === ME);
+    if (me && me.is_admin === undefined) me.is_admin = true;
   }
   save() {
     try {
@@ -334,7 +337,7 @@ export class DemoApi {
     this.save();
   }
   async session() {
-    return { userId: ME, email: "demo@example.com" };
+    return { userId: ME, email: "demo@example.com", mustChangePassword: false };
   }
   onAuthChange() {}
   async isMember() {
@@ -522,6 +525,19 @@ export class DemoApi {
     const p = this.db.profiles.find((x) => x.id === userId);
     if (p) Object.assign(p, fields);
     this.save();
+  }
+  async changePassword(password) {
+    if (String(password).length < 6) throw new Error("Use a password with at least 6 characters.");
+  }
+  // Same rules as the server function, with a fixed, obviously-fake password.
+  async adminResetPassword(userId) {
+    await new Promise((r) => setTimeout(r, 150));
+    const me = this.db.profiles.find((p) => p.id === ME);
+    if (!me || !me.is_admin) throw new Error("Only the group admin can reset passwords.");
+    if (userId === ME) throw new Error("To change your own password, use Change password under Your profile.");
+    const friend = this.db.profiles.find((p) => p.id === userId);
+    if (!friend) throw new Error("That person isn't in the group any more.");
+    return { password: "demo-pass-word", name: friend.display_name };
   }
   async signOut() {}
   subscribe() {}

@@ -3,6 +3,7 @@ import { reload, reloadQuietly } from "../../app/reload.js";
 import { S } from "../../core/state.js";
 import { debounce, esc, lsGet, lsSet, safeJson } from "../../core/util.js";
 import { markHTML } from "../../ui/cover.js";
+import { newPasswordFields } from "../account/password.js";
 import { root } from "../../ui/screen.js";
 
 export function renderLoading() {
@@ -34,6 +35,7 @@ export function renderAuth(mode, message) {
       <p class="error" role="alert"></p>
       <button class="btn block" type="submit">${signup ? "Create account" : "Sign in"}</button>
     </form>
+    ${signup ? "" : `<p class="switch"><button data-act="forgot-password">Forgot your password?</button></p>`}
     <p class="switch">${signup ? "Already have an account?" : "New here?"} <button data-act="auth-mode" data-mode="${signup ? "signin" : "signup"}">${signup ? "Sign in" : "Create an account"}</button></p>
     <div class="demo-cta">
       <button class="btn secondary block" data-act="try-demo">Try the demo</button>
@@ -60,6 +62,9 @@ export async function afterSignIn() {
     const sess = await S.api.session();
     if (!sess) return renderAuth("signin");
     S.me = sess.userId;
+    S.email = sess.email || null;
+    // Signed in with a temporary password from the admin: choose your own before anything else.
+    if (sess.mustChangePassword) return renderNewPassword();
     let member = await S.api.isMember();
     if (!member) {
       const pending = safeJson(lsGet("sp-pending"));
@@ -80,6 +85,17 @@ export async function afterSignIn() {
   } catch (e) {
     renderError(e.message);
   }
+}
+
+export function renderNewPassword() {
+  authShell(`<h1>Choose a new password</h1>
+    <p class="lede">You signed in with a temporary password. Pick your own to carry on.</p>
+    <form data-form="new-password" novalidate>
+      ${newPasswordFields(S.email)}
+      <p class="error" role="alert"></p>
+      <button class="btn block" type="submit">Save password</button>
+    </form>
+    <p class="switch"><button data-act="sign-out">Sign out</button></p>`);
 }
 
 function renderError(msg) {
