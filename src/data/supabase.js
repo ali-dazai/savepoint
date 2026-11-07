@@ -1,6 +1,6 @@
 // SupabaseApi: the real shared database. Everything the UI knows about Supabase is in this folder;
 // screens only ever call methods on S.api, which is either this class or DemoApi (same interface).
-import { catalogError, errMsg } from "./errors.js";
+import { accountError, catalogError, errMsg } from "./errors.js";
 
 const CATALOG_COLS =
   "igdb_id, name, cover_image_id, cover_color, first_release_date, release_human, hypes, platforms, genres, summary, critic_score, critic_count, igdb_url, steam_appid, similar_ids, steam_desc, steam_pct, steam_total, steam_players, steam_fetched_at, fetched_at";
@@ -21,7 +21,14 @@ export class SupabaseApi {
   }
   async session() {
     const { data } = await this.sb.auth.getSession();
-    return data.session ? { userId: data.session.user.id, email: data.session.user.email } : null;
+    if (!data.session) return null;
+    const u = data.session.user;
+    // Set by the admin's password reset (account function): ask for a new password before anything else.
+    return {
+      userId: u.id,
+      email: u.email,
+      mustChangePassword: !!(u.user_metadata && u.user_metadata.must_change_password),
+    };
   }
   onAuthChange(fn) {
     this.sb.auth.onAuthStateChange((event) => fn(event));
@@ -42,6 +49,15 @@ export class SupabaseApi {
     }
     return { needsConfirm: !data.session };
   }
+  // Sets a new password for the signed-in person and clears the "must change" flag from a reset.
+  async changePassword(password) {
+    const { error } = await this.sb.auth.updateUser({ password, data: { must_change_password: false } });
+    if (error) throw new Error(errMsg(error));
+  }
+  // Admin only (checked on the server): gives a friend a temporary password. Returns { password, name }.
+  async adminResetPassword(userId) {
+    return this.invoke("account", { action: "reset_password", user_id: userId }, accountError);
+  }
   async signOut() {
     this.unsubscribe();
     await this.sb.auth.signOut();
@@ -57,7 +73,7 @@ export class SupabaseApi {
   }
   async loadAll() {
     const [p, g, e, c] = await Promise.all([
-      this.sb.from("profiles").select("id, display_name, color, created_at"),
+      this.sb.from("profiles").select("id, display_name, color, created_at, is_admin"),
       this.sb.from("games").select("id, title, platform, year, cover_url, added_by, created_at, igdb_id"),
       this.sb
         .from("entries")
@@ -120,21 +136,25 @@ export class SupabaseApi {
     const { error } = await this.sb.from("games").update({ igdb_id: igdbId }).eq("id", gameId);
     if (error) throw new Error(errMsg(error));
   }
-  async catalog(body) {
+  // Calls one of the project's Edge Functions; toError(code) turns its error code into a friendly Error.
+  async invoke(fn, body, toError) {
     let res;
     try {
-      res = await this.sb.functions.invoke("catalog", { body });
+      res = await this.sb.functions.invoke(fn, { body });
     } catch (_) {
-      throw catalogError();
+      throw toError();
     }
     if (res.error) {
       let code = null;
       try {
         code = (await res.error.context.json()).error;
       } catch (_) {}
-      throw catalogError(code);
+      throw toError(code);
     }
     return res.data;
+  }
+  async catalog(body) {
+    return this.invoke("catalog", body, catalogError);
   }
   async catalogSearch(q) {
     return (await this.catalog({ action: "search", q })).results || [];

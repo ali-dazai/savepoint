@@ -6,6 +6,7 @@ import { friendStats } from "./view.js";
 import { taste } from "../picks/picks.js";
 import { avatar, gameCover, stars } from "../../ui/cover.js";
 import { sheetFrame } from "../../ui/sheet.js";
+import { resetPasswordPanel } from "../account/admin.js";
 
 export function friendSheet(id) {
   const p = idx.p[id];
@@ -62,7 +63,8 @@ export function friendSheet(id) {
       <div><h1>${esc(p.display_name)}</h1>
       <div class="subtle small" style="margin-top:4px">${bits.join(", ")}</div></div></div>
     ${tasteHTML}
-    ${groups || `<p class="subtle">${id === S.me ? "You haven't" : esc(p.display_name) + " hasn't"} logged any games yet.</p>`}`,
+    ${groups || `<p class="subtle">${id === S.me ? "You haven't" : esc(p.display_name) + " hasn't"} logged any games yet.</p>`}
+    ${resetPasswordPanel(id)}`,
     p.display_name,
   );
 }

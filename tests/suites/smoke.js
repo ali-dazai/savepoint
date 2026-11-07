@@ -30,6 +30,16 @@ const DEMO_KEY = "savepoint-demo-v4";
     await page.waitForSelector(".toast", { timeout: 3000 }).catch(() => {});
     return text(".toast");
   };
+  // Waits for a toast saying this: an earlier toast may still be showing, so reading the current one can race.
+  const toastSays = (re) =>
+    page
+      .waitForFunction(
+        (src) => [...document.querySelectorAll(".toast")].some((t) => new RegExp(src).test(t.textContent)),
+        re.source,
+        { timeout: 4000 },
+      )
+      .then(() => true)
+      .catch(() => false);
   const confirm = async () => {
     await page.waitForSelector(".dialog");
     await page.click('.dialog [data-r="1"]');
@@ -133,7 +143,7 @@ const DEMO_KEY = "savepoint-demo-v4";
   await page.fill("input[name=hours]", "16");
   await page.fill("textarea[name=review]", "Still a delight on a second run.");
   await page.click("form[data-form=entry] button[type=submit]");
-  check("game page: save toast: " + (await toast()), /Changes saved/.test(await toast()));
+  check("game page: save toast: " + (await toast()), await toastSays(/Changes saved/));
   await page.waitForTimeout(400);
   let db = await demoDb();
   const astro = db.entries.find((e) => e.user_id === "demo-me" && e.game_id === "g8");
@@ -178,7 +188,7 @@ const DEMO_KEY = "savepoint-demo-v4";
   await page.waitForSelector(".page .g-head");
   check(
     "edit details: new title shown + toast: " + (await toast()),
-    /Smoke Test Quest II/.test(await text(".g-head h1")) && /Details saved/.test(await toast()),
+    /Smoke Test Quest II/.test(await text(".g-head h1")) && (await toastSays(/Details saved/)),
   );
   await page.waitForTimeout(950);
   await page.click("[data-act=remove-entry]");
@@ -195,12 +205,12 @@ const DEMO_KEY = "savepoint-demo-v4";
   await confirm();
   check(
     "remove from my shelf: toast + form now says Log it",
-    /Removed from your shelf/.test(await toast()) && /Log it/.test(await text(".card-head h2")),
+    (await toastSays(/Removed from your shelf/)) && /Log it/.test(await text(".card-head h2")),
   );
   await page.click("[data-act=delete-game]");
   await confirm();
   await page.waitForSelector(".page", { state: "detached" });
-  check("delete game: toast + page closed", /Game deleted/.test(await toast()));
+  check("delete game: toast + page closed", await toastSays(/Game deleted/));
   db = await demoDb();
   check("delete game: gone from the demo database", !db.games.some((g) => g.title === "Smoke Test Quest II"));
 
@@ -226,12 +236,12 @@ const DEMO_KEY = "savepoint-demo-v4";
   await page.click("form[data-form=profile] button[type=submit]");
   check(
     "profile: name saved: " + (await toast()),
-    /Name saved/.test(await toast()) && /Sam K/.test(await text(".friend >> nth=0")),
+    (await toastSays(/Name saved/)) && /Sam K/.test(await text(".friend >> nth=0")),
   );
   await page.click('[data-act=color][data-color="5"]');
   check(
     "profile: colour saved",
-    /Colour saved/.test(await toast()) &&
+    (await toastSays(/Colour saved/)) &&
       (await page.locator('[data-act=color][data-color="5"][aria-pressed=true]').count()) === 1,
   );
 
@@ -244,7 +254,7 @@ const DEMO_KEY = "savepoint-demo-v4";
   await page.waitForTimeout(500);
   check(
     "discover: + adds to Want to play: " + (await toast()),
-    /added to Want to play/.test(await toast()) &&
+    (await toastSays(/added to Want to play/)) &&
       (await page.locator(".trend .want-btn[aria-pressed=true]").count()) >= 1,
   );
   db = await demoDb();

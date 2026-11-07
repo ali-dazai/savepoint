@@ -13,6 +13,7 @@ export async function start() {
   S.ext = {};
   S.similar = null;
   S.me = null;
+  S.email = null;
   const params = new URLSearchParams(location.search);
   const cfg = window.SAVEPOINT_CONFIG || {};
   const configured = cfg.supabaseUrl && cfg.supabaseAnonKey && supabaseLoaded();
