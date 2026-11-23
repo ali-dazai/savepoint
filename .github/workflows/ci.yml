@@ -24,6 +24,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
+      - name: Agent docs size check (AGENTS.md at most 80 lines)
+        run: sh .githooks/pre-commit
   unit:
     name: Unit tests
     runs-on: ubuntu-latest
