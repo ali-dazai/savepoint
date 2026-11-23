@@ -1,0 +1,14 @@
+#!/bin/sh
+# Size check for the one-memory layout: AGENTS.md at most 80 lines (the status file lives in savepoint-notes).
+# CI runs this too. Enable locally once per clone: git config core.hooksPath .githooks
+fail=0
+check() {
+  [ -f "$1" ] || return 0
+  n=$(wc -l < "$1")
+  if [ "$n" -gt "$2" ]; then
+    echo "size check: $1 has $n lines (max $2). Trim it before committing." >&2
+    fail=1
+  fi
+}
+check AGENTS.md 80
+exit $fail
