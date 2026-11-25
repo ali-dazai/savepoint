@@ -44,10 +44,20 @@ import { chromium, devices } from "playwright";
     "Feed: friends' games on everyone's shelf (Jon)",
     (await page.locator(".mini-shelf .mini").count()) >= 1 && /Jon/.test(await page.locator(".mini-shelf").innerText()),
   );
-  check(
-    "Feed: picks are sealed cases",
-    (await page.locator(".rail .cv .wrap").count()) === (await page.locator(".rail .rail-item").count()),
-  );
+  // Picks keep arriving for a moment ("similar game" picks load in the background), so read both counts in one
+  // step once the rail has stopped changing.
+  const pickCounts = () =>
+    page.evaluate(() =>
+      [".rail .rail-item", ".rail .rail-item .cv .wrap"].map((s) => document.querySelectorAll(s).length),
+    );
+  let pc = await pickCounts();
+  for (let i = 0; i < 15; i++) {
+    await page.waitForTimeout(200);
+    const n = await pickCounts();
+    if (n[0] === pc[0] && n[1] === pc[1]) break;
+    pc = n;
+  }
+  check(`Feed: picks are sealed cases (${pc[1]} of ${pc[0]})`, pc[0] === pc[1]);
   await page.click("[data-tab=friends]");
   check(
     "Friends: cards show a little shelf and totals",
