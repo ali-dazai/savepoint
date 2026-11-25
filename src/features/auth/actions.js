@@ -2,6 +2,7 @@
 import { start } from "../../app/boot.js";
 import { reload } from "../../app/reload.js";
 import { S } from "../../core/state.js";
+import { MIN_PASSWORD, PASSWORD_TOO_SHORT } from "../../core/constants.js";
 import { esc, lsSet } from "../../core/util.js";
 import { afterSignIn, renderAuth } from "./screens.js";
 import { FORGOT_PASSWORD_MSG, newPasswordError } from "../account/password.js";
@@ -68,7 +69,7 @@ export const authForms = {
       password = f.password.value,
       code = f.code.value.trim();
     if (!name || !email || !password || !code) throw new Error("Fill in all four fields.");
-    if (password.length < 6) throw new Error("Use a password with at least 6 characters.");
+    if (password.length < MIN_PASSWORD) throw new Error(PASSWORD_TOO_SHORT);
     lsSet("sp-pending", JSON.stringify({ name, code }));
     const res = await S.api.signUp(email, password);
     if (res.needsConfirm) {

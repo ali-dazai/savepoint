@@ -9,9 +9,7 @@ import { gameTint } from "../../ui/theme.js";
 function finishStage(g, play) {
   const url = coverUrl(g, "cover_big");
   const t = gameTint(g);
-  const img = url
-    ? `<img src="${esc(url)}" alt="" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">`
-    : "";
+  const img = url ? `<img src="${esc(url)}" alt="" decoding="async" referrerpolicy="no-referrer">` : "";
   const name = `<span class="cv-t">${esc(g.title)}</span>`;
   return `<div class="finish-stage${play ? " play" : ""}" aria-hidden="true" style="--t:${t.tile};--tm:${t.soft}">
     <div class="fs-case">

@@ -72,3 +72,7 @@ export const ICON = {
 export const SESSION_STEPS = [0.5, 1, 2];
 export const IGDB_IMG = (id, size) => `https://images.igdb.com/igdb/image/upload/t_${size}/${id}.jpg`;
 export const DAY_MS = 864e5;
+
+// New and changed passwords only (sign-in accepts any length, so older 6-character passwords still work).
+export const MIN_PASSWORD = 8;
+export const PASSWORD_TOO_SHORT = `Use a password with at least ${MIN_PASSWORD} characters.`;

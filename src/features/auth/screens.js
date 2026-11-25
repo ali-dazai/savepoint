@@ -1,6 +1,7 @@
 // Sign-in, create account, join group, not-configured and error screens, and the after-sign-in flow.
 import { reload, reloadQuietly } from "../../app/reload.js";
 import { S } from "../../core/state.js";
+import { MIN_PASSWORD } from "../../core/constants.js";
 import { debounce, esc, lsGet, lsSet, safeJson } from "../../core/util.js";
 import { markHTML } from "../../ui/cover.js";
 import { newPasswordFields } from "../account/password.js";
@@ -30,7 +31,7 @@ export function renderAuth(mode, message) {
     <form data-form="${signup ? "signup" : "signin"}" novalidate>
       ${signup ? `<label class="field"><span>Your name</span><input class="input" name="name" autocomplete="nickname" maxlength="40" required value="${esc(pending.name || "")}"></label>` : ""}
       <label class="field"><span>Email</span><input class="input" type="email" name="email" autocomplete="email" inputmode="email" autocapitalize="off" required></label>
-      <label class="field"><span>Password</span><input class="input" type="password" name="password" autocomplete="${signup ? "new-password" : "current-password"}" minlength="6" required>${signup ? "<small>At least 6 characters.</small>" : ""}</label>
+      <label class="field"><span>Password</span><input class="input" type="password" name="password" autocomplete="${signup ? "new-password" : "current-password"}" ${signup ? `minlength="${MIN_PASSWORD}"` : ""} required>${signup ? `<small>At least ${MIN_PASSWORD} characters.</small>` : ""}</label>
       ${signup ? `<label class="field"><span>Invite code</span><input class="input" name="code" autocapitalize="off" autocomplete="off" required value="${esc(pending.code || "")}"></label>` : ""}
       <p class="error" role="alert"></p>
       <button class="btn block" type="submit">${signup ? "Create account" : "Sign in"}</button>

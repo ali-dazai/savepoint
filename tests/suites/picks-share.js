@@ -106,13 +106,13 @@ fs.mkdirSync(out, { recursive: true });
   check("S27 image is 1080x1350: " + dims, dims[0] === 1080 && dims[1] === 1350);
   await shot("06-share");
   // save full card for review
-  const dataUrl = await page.locator(".share-preview img").evaluate(async (i) => {
-    const b = await (await fetch(i.src)).blob();
-    return await new Promise((r) => {
-      const fr = new FileReader();
-      fr.onload = () => r(fr.result);
-      fr.readAsDataURL(b);
-    });
+  // Read the preview through a canvas: the CSP (connect-src) rightly doesn't allow fetch() of blob: URLs.
+  const dataUrl = await page.locator(".share-preview img").evaluate((i) => {
+    const c = document.createElement("canvas");
+    c.width = i.naturalWidth;
+    c.height = i.naturalHeight;
+    c.getContext("2d").drawImage(i, 0, 0);
+    return c.toDataURL("image/png");
   });
   fs.writeFileSync(`${out}/card-${scheme}.png`, Buffer.from(dataUrl.split(",")[1], "base64"));
   await page.uncheck("input[name=share-include]");

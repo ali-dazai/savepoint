@@ -4,7 +4,7 @@ const BASE = process.env.BASE || "http://localhost:8765";
 import { chromium, devices } from "playwright";
 
 const ALI = "0dccdee8-9cfa-4cba-949f-74fe0b5064e3";
-const MOHD = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
+const SAM = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
 
 (async () => {
   const browser = await chromium.launch();
@@ -36,12 +36,12 @@ const MOHD = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
   const now = new Date().toISOString();
   const users = {
     "ali@example.com": { id: ALI, email: "ali@example.com", user_metadata: {} },
-    "mohd@example.com": { id: MOHD, email: "mohd@example.com", user_metadata: { must_change_password: true } },
+    "mohd@example.com": { id: SAM, email: "mohd@example.com", user_metadata: { must_change_password: true } },
   };
   const db = {
     profiles: [
       { id: ALI, display_name: "Ali", color: 3, created_at: now, is_admin: true },
-      { id: MOHD, display_name: "Mohd", color: 0, created_at: now, is_admin: false },
+      { id: SAM, display_name: "Sam", color: 0, created_at: now, is_admin: false },
     ],
     games: [],
     entries: [],
@@ -50,7 +50,7 @@ const MOHD = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
   let current = null;
   const puts = [];
   const resets = [];
-  let accountReply = { status: 200, body: { password: "k7qm-3xvp-9tnr", name: "Mohd" } };
+  let accountReply = { status: 200, body: { password: "k7qm-3xvp-9tnr", name: "Sam" } };
   const userJson = (u) => ({ ...u, aud: "authenticated", role: "authenticated", app_metadata: {}, identities: [{}] });
 
   await page.route("**/config.js", (r) =>
@@ -151,34 +151,34 @@ const MOHD = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
   );
   check("Change password: form cleared", (await page.locator(`${form} input[name=password]`).inputValue()) === "");
 
-  // 4. Reset Mohd's password from his page
+  // 4. Reset Sam's password from his page
   await page.click(".friend >> nth=1");
   await page.waitForSelector(".sheet .friend-head");
-  check("friend page: admin sees Reset Mohd's password", /Reset Mohd's password/.test(await text(".admin-panel")));
+  check("friend page: admin sees Reset Sam's password", /Reset Sam's password/.test(await text(".admin-panel")));
   await page.click("[data-act=reset-password]");
   await page.waitForSelector(".dialog");
-  check("reset asks first", /Reset Mohd's password\?/.test(await text(".dialog")));
+  check("reset asks first", /Reset Sam's password\?/.test(await text(".dialog")));
   await page.click('.dialog [data-r="0"]');
   check("Cancel sends nothing", resets.length === 0);
   await page.click("[data-act=reset-password]");
   await page.click('.dialog [data-r="1"]');
   await page.waitForSelector(".temp-pw");
   check(
-    "reset: account function called with Mohd's id",
+    "reset: account function called with Sam's id",
     resets.length === 1 &&
       resets[0].action === "reset_password" &&
-      resets[0].user_id === MOHD &&
+      resets[0].user_id === SAM &&
       resets[0].who === "ali@example.com",
   );
-  check("temporary password shown", (await text(".temp-pw")) === "k7qm-3xvp-9tnr" && /Mohd/.test(await text(".sheet")));
+  check("temporary password shown", (await text(".temp-pw")) === "k7qm-3xvp-9tnr" && /Sam/.test(await text(".sheet")));
   await page.click("[data-act=copy-temp-password]");
   check("Copy: toast", await toastSays(/Password copied/));
   check("Copy: on the clipboard", (await page.evaluate(() => navigator.clipboard.readText())) === "k7qm-3xvp-9tnr");
   await page.click(".sheet [data-act=close]");
   await page.waitForSelector(".sheet .friend-head");
   check(
-    "Back returns to Mohd's page and the password is gone",
-    /Mohd/.test(await text(".friend-head h1")) && (await page.locator(".temp-pw").count()) === 0,
+    "Back returns to Sam's page and the password is gone",
+    /Sam/.test(await text(".friend-head h1")) && (await page.locator(".temp-pw").count()) === 0,
   );
 
   // 5. The server refuses
@@ -197,7 +197,7 @@ const MOHD = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
   check("own page: no reset panel", (await page.locator(".admin-panel").count()) === 0);
   await page.click(".sheet [data-act=close]");
 
-  // 7. Mohd signs in with the temporary password and must choose his own
+  // 7. Sam signs in with the temporary password and must choose his own
   await page.click("[data-act=sign-out]");
   await page.waitForSelector("form[data-form=signin]");
   await signIn("mohd@example.com");
@@ -210,19 +210,19 @@ const MOHD = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
   await page.fill(`${np} input[name=password]`, "short");
   await page.fill(`${np} input[name=confirm]`, "short");
   await page.click(`${np} button[type=submit]`);
-  check("new password: too short is caught", /at least 6/.test(await text(`${np} .error`)));
-  await page.fill(`${np} input[name=password]`, "mohds-own-pw");
-  await page.fill(`${np} input[name=confirm]`, "mohds-own-pw");
+  check("new password: too short is caught", /at least 8/.test(await text(`${np} .error`)));
+  await page.fill(`${np} input[name=password]`, "sams-own-pw");
+  await page.fill(`${np} input[name=confirm]`, "sams-own-pw");
   await page.click(`${np} button[type=submit]`);
   await page.waitForSelector(".tabbar");
   const last = puts[puts.length - 1];
   check(
-    "new password saved for Mohd and the flag cleared",
-    last.who === "mohd@example.com" && last.password === "mohds-own-pw" && last.data.must_change_password === false,
+    "new password saved for Sam and the flag cleared",
+    last.who === "mohd@example.com" && last.password === "sams-own-pw" && last.data.must_change_password === false,
   );
   check("then into the app", (await page.locator(".tabbar").count()) === 1);
 
-  // 8. Mohd is not the admin
+  // 8. Sam is not the admin
   await page.click("[data-tab=friends]");
   await page.click(".friend >> nth=1");
   await page.waitForSelector(".sheet .friend-head");
