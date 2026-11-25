@@ -202,6 +202,14 @@ const DEMO_KEY = "savepoint-demo-v4";
       /Your log/.test(await text(".card-head h2")),
   );
   await page.click("[data-act=remove-entry]");
+  await page.waitForSelector(".dialog");
+  check(
+    "confirm dialog: a destructive question starts on Cancel (S59)",
+    await page.locator('.dialog [data-r="0"]').evaluate((b) => b === document.activeElement),
+  );
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(150);
+  await page.click("[data-act=remove-entry]");
   await confirm();
   check(
     "remove from my shelf: toast + form now says Log it",
@@ -272,6 +280,29 @@ const DEMO_KEY = "savepoint-demo-v4";
   await page.click("[data-act=try-demo]");
   await page.waitForSelector(".tabbar");
   check("try the demo: back in demo mode", (await page.locator(".demo-bar").count()) === 1);
+
+  // A cover that can't load is removed (one listener; inline onerror is blocked by the CSP).
+  const brokenGone = await page.evaluate(
+    () =>
+      new Promise((r) => {
+        const img = document.createElement("img");
+        img.src = "https://invalid.invalid/cover.jpg";
+        document.querySelector("#app").appendChild(img);
+        setTimeout(() => r(!img.isConnected), 3000);
+      }),
+  );
+  check("broken cover image is removed", brokenGone);
+
+  // Clickjacking guard: inside another page's frame the app refuses to start.
+  await page.setContent(`<iframe src="${BASE}/?demo" style="width:390px;height:700px"></iframe>`);
+  const framed = page.frames().find((f) => f !== page.mainFrame());
+  await framed.waitForLoadState("load");
+  await page.waitForTimeout(800);
+  check(
+    "framed copy refuses to start",
+    /Open Save Point directly/.test(await framed.locator("body").innerText()) &&
+      (await framed.locator("#app *").count()) === 0,
+  );
 
   console.log("errors:", JSON.stringify(errors));
   await browser.close();

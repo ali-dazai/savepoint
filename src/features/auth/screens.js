@@ -22,12 +22,13 @@ export function renderNotConfigured() {
     <button class="btn block" data-act="start-demo">Try the demo</button>`);
 }
 
-export function renderAuth(mode, message) {
+// noticeHtml is inserted as HTML: pass only constants or text whose dynamic parts went through esc().
+export function renderAuth(mode, noticeHtml) {
   const signup = mode === "signup";
   const pending = safeJson(lsGet("sp-pending")) || {};
   authShell(`<h1>${signup ? "Join your crew" : "Save Point"}</h1>
     <p class="lede">${signup ? "Create an account with the invite code a friend gave you." : "Track and review games with your friends."}</p>
-    ${message ? `<div class="notice" role="status">${message}</div>` : ""}
+    ${noticeHtml ? `<div class="notice" role="status">${noticeHtml}</div>` : ""}
     <form data-form="${signup ? "signup" : "signin"}" novalidate>
       ${signup ? `<label class="field"><span>Your name</span><input class="input" name="name" autocomplete="nickname" maxlength="40" required value="${esc(pending.name || "")}"></label>` : ""}
       <label class="field"><span>Email</span><input class="input" type="email" name="email" autocomplete="email" inputmode="email" autocapitalize="off" required></label>
@@ -74,6 +75,8 @@ export async function afterSignIn() {
           await S.api.join(pending.code, pending.name);
           member = true;
         } catch (e) {
+          // Forget the code that failed (keep the name), so reloading doesn't send it again and use up a try.
+          lsSet("sp-pending", JSON.stringify({ name: pending.name }));
           return renderJoin(e.message);
         }
       }

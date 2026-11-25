@@ -44,11 +44,18 @@ const p_sorted = (a) => [...a].sort();
 
 test("no inline event handlers (onerror=, onclick=...) in index.html or the app's HTML templates", () => {
   for (const f of ["index.html", ...walk("src")]) {
-    assert.doesNotMatch(read(f), /<[^>]*\son[a-z]+\s*=\s*["']/i, f);
+    assert.doesNotMatch(
+      read(f),
+      /\son(?:error|load|click|input|change|submit|focus|blur|mouse[a-z]*|key[a-z]*|touch[a-z]*|pointer[a-z]*)\s*=/,
+      f,
+    );
   }
 });
 
 test("service worker: offline fallback to index.html only for page loads", () => {
   const sw = read("sw.js");
-  assert.match(sw, /req\.mode === "navigate" \? caches\.match\("\.\/index\.html"\)/);
+  assert.match(
+    sw,
+    /req\.mode === "navigate"\s*\?\s*caches\.match\("\.\/index\.html"\)\.then\(\(p\) => p \|\| Response\.error\(\)\)/,
+  );
 });
