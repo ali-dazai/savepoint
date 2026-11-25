@@ -62,9 +62,7 @@ export function pageFrame(label, head, body, { tint, hs }) {
     <div class="page-inner">${head}<div class="booklet" style="${styleVars(manualVars(hs[0], hs[1]))}"><div class="g-body">${body}</div></div></div></div>`;
 }
 function caseHead({ url, tint, title }) {
-  const img = url
-    ? `<img src="${esc(url)}" alt="" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">`
-    : "";
+  const img = url ? `<img src="${esc(url)}" alt="" decoding="async" referrerpolicy="no-referrer">` : "";
   const name = `<span class="cv-t">${esc(title)}</span>`;
   return `<div class="open-case" aria-hidden="true" style="--t:${tint.tile};--tm:${tint.soft}">
     <div class="tray"><div class="disc"><div class="label">${img || name}</div><span class="hub"></span></div></div>

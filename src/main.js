@@ -29,6 +29,7 @@ import { shareActions } from "./features/share/actions.js";
 import { shareSheet } from "./features/share/sheet.js";
 import { shelfActions } from "./features/shelf/actions.js";
 import { shelfView } from "./features/shelf/view.js";
+import { hideBrokenImages } from "./ui/cover.js";
 import { closeSheet, openSheet, renderSheet } from "./ui/sheet.js";
 import { registerServiceWorker } from "./ui/update.js";
 
@@ -97,7 +98,14 @@ registerForms(gameForms);
 registerForms(catalogForms);
 registerForms(accountForms);
 
-wireEvents();
-wireGestures();
-start();
-registerServiceWorker();
+// Don't run inside another site's frame (clickjacking: a hidden copy of the app under a fake page tricking taps).
+// GitHub Pages can't send the frame-ancestors / X-Frame-Options headers that would normally block it.
+if (window.top !== window.self) {
+  document.body.textContent = "Open Save Point directly at https://ali-dazai.github.io/savepoint/";
+} else {
+  hideBrokenImages();
+  wireEvents();
+  wireGestures();
+  start();
+  registerServiceWorker();
+}

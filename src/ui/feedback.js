@@ -11,7 +11,8 @@ export function confirmDialog({ title, body, ok, danger }) {
       <h2 id="dlg-t">${esc(title)}</h2><p>${esc(body)}</p>
       <div class="row"><button class="btn secondary" data-r="0">Cancel</button><button class="btn" data-r="1" style="${danger ? "background:var(--danger);color:#000" : ""}">${esc(ok)}</button></div></div>`;
     document.body.appendChild(el);
-    el.querySelector('[data-r="1"]').focus();
+    // Destructive questions start on Cancel, so a stray Enter or tap-through can't delete anything.
+    el.querySelector(`[data-r="${danger ? 0 : 1}"]`).focus();
     const done = (answer) => {
       document.removeEventListener("keydown", onKey);
       el.remove();

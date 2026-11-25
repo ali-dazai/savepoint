@@ -62,7 +62,9 @@ delete policy is `added_by = auth.uid()`. Low impact (Ali can delete rows in the
 matters: let any member delete games that nobody else has logged, or reassign `added_by` when a profile is
 deleted. Not changed; recorded as a suggestion.
 
-**F5 — invite code brute force.** `join_group()` is callable by any signed-in account with no rate limit beyond
+**F5 — invite code brute force.** **Mitigated 2026-11-25:** `join_group()` now allows at most 20 wrong codes per
+clock hour across the whole project, then refuses every join until the next hour (counter kept in a sequence, because
+sequence changes survive the rolled-back failed call). Verified on the live project. Original finding: `join_group()` is callable by any signed-in account with no rate limit beyond
 Supabase's API limits, and sign-up is open. The code is the only barrier to joining. Mitigation is already on the
 suggestions list (S43: a long random code). Enabling Supabase's **leaked-password protection** (advisor WARN) and
 keeping **email confirmation** on also raise the cost of throwaway accounts. Dashboard settings, not SQL.
@@ -78,6 +80,12 @@ are the design, not defects.
 - The realtime publication contains only `games` and `entries`; realtime respects RLS.
 - `catalog_games` exposes no secrets (the Twitch token lives in `server_cache`).
 - The SQL files in the notes repo and the live database agree on every table, policy, grant and function.
+
+## Re-check 2026-11-25 (read-only, plus the F5 fix)
+
+Grants, policies and functions unchanged from this audit. Simulated live, inside rolled-back transactions: a signed-in
+non-member sees 0 rows in every table and is refused on `settings`; `anon` is refused everywhere; a non-member insert
+into `games` is refused by RLS; the new rate-limit counter can't be read or reset by API roles.
 
 ## Data snapshot (counts only)
 

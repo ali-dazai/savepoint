@@ -8,8 +8,8 @@ import { S } from "../../src/core/state.js";
 import { loadFixture, ME, MAYA } from "./fixture.js";
 
 test("newPasswordError: length first, then the two must match", () => {
-  assert.equal(newPasswordError("", ""), "Use a password with at least 6 characters.");
-  assert.equal(newPasswordError("12345", "12345"), "Use a password with at least 6 characters.");
+  assert.equal(newPasswordError("", ""), "Use a password with at least 8 characters.");
+  assert.equal(newPasswordError("12345", "12345"), "Use a password with at least 8 characters.");
   assert.equal(newPasswordError("hunter22", "hunter2"), "The two passwords don't match.");
   assert.equal(newPasswordError("hunter22", "hunter22"), null);
 });
@@ -68,7 +68,7 @@ test("DemoApi: 'you' are the admin (also in old saved demo data) and resets foll
   assert.deepEqual(await api.adminResetPassword("demo-maya"), { password: "demo-pass-word", name: "Maya" });
   await assert.rejects(api.adminResetPassword("demo-me"), /Change password under Your profile/);
   await assert.rejects(api.adminResetPassword("nobody"), /isn't in the group/);
-  await assert.rejects(api.changePassword("short"), /at least 6/);
+  await assert.rejects(api.changePassword("short"), /at least 8/);
   await api.changePassword("long enough");
   // saved before admins existed: no is_admin field at all
   api.db.profiles.forEach((p) => delete p.is_admin);

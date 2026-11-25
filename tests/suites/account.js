@@ -210,7 +210,7 @@ const SAM = "00000000-0000-4000-8000-000000000002";
   await page.fill(`${np} input[name=password]`, "short");
   await page.fill(`${np} input[name=confirm]`, "short");
   await page.click(`${np} button[type=submit]`);
-  check("new password: too short is caught", /at least 6/.test(await text(`${np} .error`)));
+  check("new password: too short is caught", /at least 8/.test(await text(`${np} .error`)));
   await page.fill(`${np} input[name=password]`, "sams-own-pw");
   await page.fill(`${np} input[name=confirm]`, "sams-own-pw");
   await page.click(`${np} button[type=submit]`);
