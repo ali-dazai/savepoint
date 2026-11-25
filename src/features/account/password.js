@@ -17,7 +17,7 @@ export function newPasswordError(password, confirm) {
 // The two inputs. A hidden username field lets the phone's password manager save the new password to the right account.
 export function newPasswordFields(email) {
   return `${email ? `<input type="email" name="username" autocomplete="username" value="${esc(email)}" hidden>` : ""}
-    <label class="field"><span>New password</span><input class="input" type="password" name="password" autocomplete="new-password" minlength="${MIN_PASSWORD}" required><small>At least 6 characters.</small></label>
+    <label class="field"><span>New password</span><input class="input" type="password" name="password" autocomplete="new-password" minlength="${MIN_PASSWORD}" required><small>At least ${MIN_PASSWORD} characters.</small></label>
     <label class="field"><span>Type it again</span><input class="input" type="password" name="confirm" autocomplete="new-password" minlength="${MIN_PASSWORD}" required></label>`;
 }
 

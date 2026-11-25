@@ -104,7 +104,13 @@ self.addEventListener("fetch", (e) => {
         .catch(() =>
           caches
             .match(req)
-            .then((hit) => hit || (req.mode === "navigate" ? caches.match("./index.html") : Response.error())),
+            .then(
+              (hit) =>
+                hit ||
+                (req.mode === "navigate"
+                  ? caches.match("./index.html").then((p) => p || Response.error())
+                  : Response.error()),
+            ),
         ),
     );
     return;

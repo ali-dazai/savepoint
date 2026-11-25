@@ -3,8 +3,8 @@
 const BASE = process.env.BASE || "http://localhost:8765";
 import { chromium, devices } from "playwright";
 
-const ALI = "0dccdee8-9cfa-4cba-949f-74fe0b5064e3";
-const SAM = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
+const ALI = "00000000-0000-4000-8000-000000000001";
+const SAM = "00000000-0000-4000-8000-000000000002";
 
 (async () => {
   const browser = await chromium.launch();
@@ -36,7 +36,7 @@ const SAM = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
   const now = new Date().toISOString();
   const users = {
     "ali@example.com": { id: ALI, email: "ali@example.com", user_metadata: {} },
-    "mohd@example.com": { id: SAM, email: "mohd@example.com", user_metadata: { must_change_password: true } },
+    "sam@example.com": { id: SAM, email: "sam@example.com", user_metadata: { must_change_password: true } },
   };
   const db = {
     profiles: [
@@ -200,7 +200,7 @@ const SAM = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
   // 7. Sam signs in with the temporary password and must choose his own
   await page.click("[data-act=sign-out]");
   await page.waitForSelector("form[data-form=signin]");
-  await signIn("mohd@example.com");
+  await signIn("sam@example.com");
   await page.waitForSelector("form[data-form=new-password]");
   check(
     "flagged account lands on Choose a new password, not the app",
@@ -218,7 +218,7 @@ const SAM = "b6f6b12b-ea5b-46d7-86bc-70aab13aa5ab";
   const last = puts[puts.length - 1];
   check(
     "new password saved for Sam and the flag cleared",
-    last.who === "mohd@example.com" && last.password === "sams-own-pw" && last.data.must_change_password === false,
+    last.who === "sam@example.com" && last.password === "sams-own-pw" && last.data.must_change_password === false,
   );
   check("then into the app", (await page.locator(".tabbar").count()) === 1);
 

@@ -89,7 +89,7 @@ export function spoilerText(e, cls) {
   return `<div class="${cls}">${e.spoiler ? '<span class="spoiler-tag">Spoilers</span> ' : ""}${esc(e.review)}</div>`;
 }
 // A cover that fails to load is removed so the title insert underneath shows. One capturing listener instead of
-// inline onerror="" attributes, which the Content-Security-Policy (script-src 'self') would block.
+// inline onerror attributes, which the Content-Security-Policy (script-src 'self') would block.
 export function hideBrokenImages(root = document) {
   root.addEventListener(
     "error",
