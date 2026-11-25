@@ -1,4 +1,5 @@
 // DemoApi: the same interface as SupabaseApi, backed by sample data in localStorage so the app can be explored without a database.
+import { MIN_PASSWORD, PASSWORD_TOO_SHORT } from "../core/constants.js";
 
 export const DEMO_KEY = "savepoint-demo-v4";
 export const ME = "demo-me";
@@ -527,7 +528,7 @@ export class DemoApi {
     this.save();
   }
   async changePassword(password) {
-    if (String(password).length < 6) throw new Error("Use a password with at least 6 characters.");
+    if (String(password).length < MIN_PASSWORD) throw new Error(PASSWORD_TOO_SHORT);
   }
   // Same rules as the server function, with a fixed, obviously-fake password.
   async adminResetPassword(userId) {

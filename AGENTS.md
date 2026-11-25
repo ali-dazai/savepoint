@@ -29,8 +29,9 @@ changelog, plans, suggestions) live in the private `savepoint-notes` repo.
    "find out why", investigate read-only and report back.
 2. This repo is public: never commit secrets, the invite code, anyone's email, backend SQL, or anything from
    `savepoint-notes`. The Supabase URL and publishable key in `config.js` are public by design.
-3. Branch and pull request; Ali merges. `git pull --ff-only` before committing, never force-push. Commit signed
-   from the laptop (WSL `~/code`), Conventional Commits, subject 72 characters max.
+3. Branch and pull request; Ali merges (a ruleset on `main` requires a PR and green CI). `git pull --ff-only`
+   before committing, never force-push. Commit signed from the laptop (WSL `~/code`), Conventional Commits,
+   subject 72 characters max.
 4. No `Claude-Session:` link in commit messages or PR text here.
 5. No framework, no bundler: files are served as written. `src/data/` is the only code that knows a backend
    exists; a module-graph unit test enforces the layering (`docs/ARCHITECTURE.md`).

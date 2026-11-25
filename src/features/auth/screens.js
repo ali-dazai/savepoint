@@ -1,6 +1,7 @@
 // Sign-in, create account, join group, not-configured and error screens, and the after-sign-in flow.
 import { reload, reloadQuietly } from "../../app/reload.js";
 import { S } from "../../core/state.js";
+import { MIN_PASSWORD } from "../../core/constants.js";
 import { debounce, esc, lsGet, lsSet, safeJson } from "../../core/util.js";
 import { markHTML } from "../../ui/cover.js";
 import { newPasswordFields } from "../account/password.js";
@@ -21,16 +22,17 @@ export function renderNotConfigured() {
     <button class="btn block" data-act="start-demo">Try the demo</button>`);
 }
 
-export function renderAuth(mode, message) {
+// noticeHtml is inserted as HTML: pass only constants or text whose dynamic parts went through esc().
+export function renderAuth(mode, noticeHtml) {
   const signup = mode === "signup";
   const pending = safeJson(lsGet("sp-pending")) || {};
   authShell(`<h1>${signup ? "Join your crew" : "Save Point"}</h1>
     <p class="lede">${signup ? "Create an account with the invite code a friend gave you." : "Track and review games with your friends."}</p>
-    ${message ? `<div class="notice" role="status">${message}</div>` : ""}
+    ${noticeHtml ? `<div class="notice" role="status">${noticeHtml}</div>` : ""}
     <form data-form="${signup ? "signup" : "signin"}" novalidate>
       ${signup ? `<label class="field"><span>Your name</span><input class="input" name="name" autocomplete="nickname" maxlength="40" required value="${esc(pending.name || "")}"></label>` : ""}
       <label class="field"><span>Email</span><input class="input" type="email" name="email" autocomplete="email" inputmode="email" autocapitalize="off" required></label>
-      <label class="field"><span>Password</span><input class="input" type="password" name="password" autocomplete="${signup ? "new-password" : "current-password"}" minlength="6" required>${signup ? "<small>At least 6 characters.</small>" : ""}</label>
+      <label class="field"><span>Password</span><input class="input" type="password" name="password" autocomplete="${signup ? "new-password" : "current-password"}" ${signup ? `minlength="${MIN_PASSWORD}"` : ""} required>${signup ? `<small>At least ${MIN_PASSWORD} characters.</small>` : ""}</label>
       ${signup ? `<label class="field"><span>Invite code</span><input class="input" name="code" autocapitalize="off" autocomplete="off" required value="${esc(pending.code || "")}"></label>` : ""}
       <p class="error" role="alert"></p>
       <button class="btn block" type="submit">${signup ? "Create account" : "Sign in"}</button>
@@ -73,6 +75,8 @@ export async function afterSignIn() {
           await S.api.join(pending.code, pending.name);
           member = true;
         } catch (e) {
+          // Forget the code that failed (keep the name), so reloading doesn't send it again and use up a try.
+          lsSet("sp-pending", JSON.stringify({ name: pending.name }));
           return renderJoin(e.message);
         }
       }

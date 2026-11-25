@@ -3,6 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- Content-Security-Policy: scripts only from this site, data only to our Supabase project. If an XSS bug ever
+         slips in, it can't load outside code or send data elsewhere. connect-src must match config.js (a unit test
+         checks it). Styles allow 'unsafe-inline' because the UI sets colours in style attributes. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self' https://evkzdabyyxbtchqtebfr.supabase.co wss://evkzdabyyxbtchqtebfr.supabase.co; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
     <title>Save Point</title>
     <meta name="description" content="A shared game log for you and your friends." />
     <meta name="theme-color" content="#2A1418" />

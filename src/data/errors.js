@@ -1,4 +1,5 @@
 // Turns Supabase and server-function errors into plain-English messages.
+import { PASSWORD_TOO_SHORT } from "../core/constants.js";
 
 export function errMsg(e) {
   if (!e) return "Something went wrong.";
@@ -8,7 +9,7 @@ export function errMsg(e) {
   // Before the generic "Password should be…" rule below, which would also match this one.
   if (/should be different from the old password/i.test(m))
     return "That's your current password. Pick a different one.";
-  if (/Password should be/i.test(m)) return "Use a password with at least 6 characters.";
+  if (/Password should be at least/i.test(m)) return PASSWORD_TOO_SHORT;
   if (/Failed to fetch|NetworkError|Load failed/i.test(m))
     return "Can't reach the server. Check your connection and try again.";
   if (/Email not confirmed/i.test(m)) return "Confirm your email first: open the link we sent you, then sign in.";

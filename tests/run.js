@@ -32,6 +32,15 @@ const server = http.createServer((req, res) => {
       return res.end("not found");
     }
     res.writeHead(200, { "Content-Type": TYPES[path.extname(file)] || "application/octet-stream" });
+    // The suites that fake Supabase point the app at https://mock.supabase.co; let the real CSP allow it too,
+    // so every suite still runs under the production Content-Security-Policy.
+    if (path.basename(file) === "index.html") {
+      data = Buffer.from(
+        data
+          .toString()
+          .replace("connect-src 'self'", "connect-src 'self' https://mock.supabase.co wss://mock.supabase.co"),
+      );
+    }
     res.end(data);
   });
 });

@@ -6,7 +6,7 @@ describe("errMsg", () => {
   const cases = [
     ["Invalid login credentials", "That email and password don't match."],
     ["User already registered", "There's already an account with that email. Sign in instead."],
-    ["Password should be at least 6 characters", "Use a password with at least 6 characters."],
+    ["Password should be at least 6 characters", "Use a password with at least 8 characters."],
     ["Failed to fetch", "Can't reach the server. Check your connection and try again."],
     ["NetworkError when attempting to fetch resource", "Can't reach the server. Check your connection and try again."],
     ["Load failed", "Can't reach the server. Check your connection and try again."],

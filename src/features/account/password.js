@@ -1,5 +1,6 @@
 // Choosing a new password: shared fields and checks for the screen after a reset and for Change password.
 import { S } from "../../core/state.js";
+import { MIN_PASSWORD, PASSWORD_TOO_SHORT } from "../../core/constants.js";
 import { esc } from "../../core/util.js";
 
 // Shown on the sign-in screen. There's no email reset (decision O8): the group admin resets it from inside the app.
@@ -8,7 +9,7 @@ export const FORGOT_PASSWORD_MSG =
 
 // null when fine, otherwise what to fix.
 export function newPasswordError(password, confirm) {
-  if (!password || password.length < 6) return "Use a password with at least 6 characters.";
+  if (!password || password.length < MIN_PASSWORD) return PASSWORD_TOO_SHORT;
   if (password !== confirm) return "The two passwords don't match.";
   return null;
 }
@@ -16,8 +17,8 @@ export function newPasswordError(password, confirm) {
 // The two inputs. A hidden username field lets the phone's password manager save the new password to the right account.
 export function newPasswordFields(email) {
   return `${email ? `<input type="email" name="username" autocomplete="username" value="${esc(email)}" hidden>` : ""}
-    <label class="field"><span>New password</span><input class="input" type="password" name="password" autocomplete="new-password" minlength="6" required><small>At least 6 characters.</small></label>
-    <label class="field"><span>Type it again</span><input class="input" type="password" name="confirm" autocomplete="new-password" minlength="6" required></label>`;
+    <label class="field"><span>New password</span><input class="input" type="password" name="password" autocomplete="new-password" minlength="${MIN_PASSWORD}" required><small>At least ${MIN_PASSWORD} characters.</small></label>
+    <label class="field"><span>Type it again</span><input class="input" type="password" name="confirm" autocomplete="new-password" minlength="${MIN_PASSWORD}" required></label>`;
 }
 
 // Under Your profile on the Friends tab. Not shown in the demo, which has no account.

@@ -1,6 +1,6 @@
 // Save Point service worker: keeps the app shell available so it opens fast
 // (and opens at all when the connection is bad). Data always comes live from Supabase.
-const VERSION = "savepoint-v10";
+const VERSION = "savepoint-v11";
 const SHELL = [
   "./",
   "./index.html",
@@ -99,7 +99,19 @@ self.addEventListener("fetch", (e) => {
           }
           return res;
         })
-        .catch(() => caches.match(req).then((hit) => hit || caches.match("./index.html"))),
+        // Offline: the cached copy; the app page only for page loads, so a missing script fails as a script
+        // instead of being handed HTML (known gap G19).
+        .catch(() =>
+          caches
+            .match(req)
+            .then(
+              (hit) =>
+                hit ||
+                (req.mode === "navigate"
+                  ? caches.match("./index.html").then((p) => p || Response.error())
+                  : Response.error()),
+            ),
+        ),
     );
     return;
   }

@@ -52,9 +52,7 @@ function coverHTML({ title, url, tint, cls = "", sticker = "", sealed = false, w
     .map((st) => `<i class="scuff" style="${st}"></i>`)
     .join("");
   return `<span class="cv ${cls}" style="--t:${tint.tile};--tm:${tint.soft}" aria-hidden="true"><span class="art">${
-    url
-      ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">`
-      : ""
+    url ? `<img src="${esc(url)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : ""
   }<span class="cv-t">${esc(title)}</span></span>${sealed ? `<span class="wrap"></span>` : ""}${scuffs}${sticker}</span>`;
 }
 export function gameCover(g, opts = {}) {
@@ -89,4 +87,15 @@ export function spoilerText(e, cls) {
     return `<button type="button" class="${cls} spoiler" data-act="reveal" data-id="${e.id}"><span>Contains spoilers. Tap to show.</span></button>`;
   }
   return `<div class="${cls}">${e.spoiler ? '<span class="spoiler-tag">Spoilers</span> ' : ""}${esc(e.review)}</div>`;
+}
+// A cover that fails to load is removed so the title insert underneath shows. One capturing listener instead of
+// inline onerror attributes, which the Content-Security-Policy (script-src 'self') would block.
+export function hideBrokenImages(root = document) {
+  root.addEventListener(
+    "error",
+    (e) => {
+      if (e.target instanceof HTMLImageElement && e.target.closest("#app, #layer")) e.target.remove();
+    },
+    true,
+  );
 }
