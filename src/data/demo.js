@@ -136,7 +136,91 @@ export function seed() {
   add(13, "demo-maya", "want", null, null, "", 3, 0);
   add(12, "demo-jon", "want", null, null, "", 4, 0);
   const C = [9001, 9004, 9011, 9013].map((id) => demoRow(DEMO_CATALOG.find((x) => x.igdb_id === id)));
-  return { profiles: P, games: G, entries: E, catalog: C };
+  return { profiles: P, games: G, entries: E, catalog: C, prices: demoPrices(), prices_at: new Date().toISOString() };
+}
+
+// P5 buy-or-wait: one made-up price_predictions row per shelf game linked to the catalogue, one for each case the
+// game page shows (wait on the model, buy because it's rarely discounted, on sale now, and a low-confidence guess).
+export function demoPrices() {
+  const base = { country: "AE", currency: "AED", model_version: "demo-1" };
+  return [
+    {
+      ...base,
+      igdb_id: 9011,
+      steam_appid: "3100110",
+      regular_price: 92,
+      current_price: 92,
+      current_cut: 0,
+      low_1y: 69,
+      median_past_cut: 25,
+      sales_seen: 3,
+      history_days: 380,
+      p_30: 0.72,
+      p_90: 0.88,
+      verdict: "wait",
+      basis: "model",
+      confidence: "medium",
+      reason: "It has gone 25% off three times this year, and the winter sale is a few weeks away.",
+      computed_at: daysAgo(2),
+    },
+    {
+      ...base,
+      igdb_id: 9004,
+      steam_appid: "1245620",
+      regular_price: 175,
+      current_price: 175,
+      current_cut: 0,
+      low_1y: 148.75,
+      median_past_cut: null,
+      sales_seen: 0,
+      history_days: 1130,
+      p_30: 0.03,
+      p_90: 0.08,
+      verdict: "buy",
+      basis: "model",
+      confidence: "high",
+      reason: "Rarely discounted: waiting is unlikely to save you much.",
+      computed_at: daysAgo(1, 4),
+    },
+    {
+      ...base,
+      igdb_id: 9001,
+      steam_appid: "1145350",
+      regular_price: 41.25,
+      current_price: 16.5,
+      current_cut: 60,
+      low_1y: 16.5,
+      median_past_cut: 50,
+      sales_seen: 6,
+      history_days: 540,
+      p_30: null,
+      p_90: null,
+      verdict: "buy",
+      basis: "on_sale",
+      confidence: "high",
+      reason: "A deep cut for this game, and its next big sale is likely months away.",
+      computed_at: daysAgo(1),
+    },
+    {
+      ...base,
+      igdb_id: 9013,
+      steam_appid: "3100130",
+      regular_price: 129,
+      current_price: 129,
+      current_cut: 0,
+      low_1y: null,
+      median_past_cut: null,
+      sales_seen: 0,
+      history_days: 40,
+      p_30: 0.18,
+      p_90: 0.46,
+      verdict: "unsure",
+      basis: "baseline",
+      confidence: "low",
+      reason: "Too little price history yet, so this uses how similar games usually go on sale.",
+      computed_at: daysAgo(2, 3),
+    },
+  ];
 }
 
 export const DEMO_CATALOG = [
@@ -327,6 +411,12 @@ export class DemoApi {
     // Demo data saved before admins existed: make "you" the admin rather than resetting everyone's demo.
     const me = this.db.profiles.find((p) => p.id === ME);
     if (me && me.is_admin === undefined) me.is_admin = true;
+    // Demo prices are dated relative to when they were made: add them to older demo data and remake them weekly,
+    // so the price card never goes stale in a long-lived demo. (Editing a row's computed_at keeps prices_at.)
+    if (!Array.isArray(this.db.prices) || !(Date.now() - Date.parse(this.db.prices_at) < 6 * 864e5)) {
+      this.db.prices = demoPrices();
+      this.db.prices_at = new Date().toISOString();
+    }
   }
   save() {
     try {
@@ -347,6 +437,8 @@ export class DemoApi {
   async loadAll() {
     const copy = JSON.parse(JSON.stringify(this.db));
     copy.catalog = copy.catalog || [];
+    copy.prices = copy.prices || [];
+    delete copy.prices_at;
     return copy;
   }
   async catalogSearch(q) {

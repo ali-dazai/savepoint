@@ -10,6 +10,7 @@ export const S = {
   games: [],
   entries: [],
   catalog: [],
+  prices: [], // P5: price_predictions rows (buy-or-wait), one per catalogue game
   tab: storedChoice("sp-tab", ["feed", "shelf", "discover", "friends"], "feed"),
   scope: storedChoice("sp-scope", ["mine", "all"], "mine"),
   status: "all",
@@ -37,12 +38,13 @@ export const S = {
   steamTried: new Set(), // S35: Steam lookups already done this session
   steamLoading: new Set(),
 };
-export let idx = { p: {}, g: {}, byGame: {}, c: {}, byIgdb: {} };
+export let idx = { p: {}, g: {}, byGame: {}, c: {}, byIgdb: {}, price: {} };
 
 export function reindex() {
-  idx = { p: {}, g: {}, byGame: {}, c: {}, byIgdb: {} };
+  idx = { p: {}, g: {}, byGame: {}, c: {}, byIgdb: {}, price: {} };
   S.profiles.forEach((p) => (idx.p[p.id] = p));
   S.catalog.forEach((c) => (idx.c[c.igdb_id] = c));
+  (S.prices || []).forEach((r) => (idx.price[r.igdb_id] = r));
   S.games.forEach((g) => {
     idx.g[g.id] = g;
     if (g.igdb_id != null) idx.byIgdb[g.igdb_id] = g;
@@ -85,6 +87,10 @@ export function groupLine(gameId, max = 2) {
 }
 export function catOf(game) {
   return game && game.igdb_id != null ? idx.c[game.igdb_id] || null : null;
+}
+// The buy-or-wait prediction for a shelf game linked to the catalogue, or null.
+export function priceOf(game) {
+  return game && game.igdb_id != null ? idx.price[game.igdb_id] || null : null;
 }
 export function catRow(igdbId) {
   return idx.c[igdbId] || S.ext[igdbId] || null;
