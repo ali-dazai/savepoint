@@ -17,6 +17,9 @@ _Demo data shows title-only cases; real games get their cover art from IGDB._
 - **Game page**: the case opens, the disc settles in the tray, and a booklet holds your log (status, rating,
   hours, review with a spoiler toggle, start/finish dates), friends' logs, and scores from friends, critics (IGDB)
   and Steam.
+- **Buy or wait**: for shelf games on Steam, the game page shows a "Price on Steam" card: buy now, wait for a
+  sale (with the chance of a 20%+ sale within 30 and 90 days), on sale now, or hard to say, with the regular
+  price, 1-year low and how confident the guess is. Price history from IsThereAnyDeal; hidden when over 8 days old.
 - **Discover**: Trending (Steam's most played, mapped to IGDB, with why it's trending) and a release Calendar that
   includes everyone's Want to play games.
 - **Friends**: a card per member with taste match, and a page per friend grouped by status.
@@ -68,8 +71,8 @@ story, including where the planned price predictor and spoiler-free guide plug i
 - `tests/unit/`: `node:test` suites for the pure modules, including guards that the service worker pre-caches
   every module and that the module layers only import downwards.
 - `tests/suites/`: Playwright, phone-sized, against a local copy of the site. `smoke.js` walks the main user
-  flows; the others cover regressions, picks and sharing, Discover, and the real `SupabaseApi` against a mocked
-  Supabase.
+  flows; the others cover regressions, picks and sharing, Discover, the price card, and the real `SupabaseApi`
+  against a mocked Supabase.
 - GitHub Actions runs lint, unit and browser tests on every push and pull request, and a daily live check of the
   Edge Function's health endpoint.
 

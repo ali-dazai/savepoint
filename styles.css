@@ -1806,6 +1806,110 @@ input[type="date"].input {
   color: var(--ink-2);
 }
 
+/* P5 buy-or-wait: the "Price on Steam" card in the booklet. A price tag on the manual's paper, its edge coloured by
+   the verdict. Every class is pw- prefixed (generic names have collided before, incident I3). */
+.pw-card {
+  --pw-tone: var(--ink-3);
+  position: relative;
+  margin: 0;
+  padding: 14px 16px 12px 19px;
+  border-radius: 16px;
+  background: var(--s1);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.pw-card::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: var(--pw-tone);
+}
+.pw-card.pw-wait {
+  --pw-tone: #b7791f;
+}
+.pw-card.pw-buy {
+  --pw-tone: #2f7d4f;
+}
+.pw-card.pw-sale {
+  --pw-tone: var(--danger);
+}
+.pw-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+.pw-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.pw-conf {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  background: var(--s2);
+  border-radius: 999px;
+  padding: 2px 9px;
+  white-space: nowrap;
+}
+.pw-verdict {
+  margin: 4px 0 0;
+  font-family: var(--display);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--ink);
+}
+.pw-odds,
+.pw-sale {
+  margin: 6px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.pw-low {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.pw-drought,
+.pw-reason {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--body);
+  overflow-wrap: anywhere;
+}
+.pw-context {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.pw-foot {
+  margin: 10px 0 0;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line-2);
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+.pw-foot a {
+  color: var(--ink-2);
+}
+.pw-context span,
+.pw-foot a {
+  white-space: nowrap;
+}
+
 .review {
   display: flex;
   gap: 12px;

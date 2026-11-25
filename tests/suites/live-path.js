@@ -146,6 +146,9 @@ import { chromium, devices } from "playwright";
     const m = path.match(/^\/rest\/v1\/(\w+)/);
     if (m) {
       const t = m[1];
+      // P5: until the test adds rows, behave as if the price_predictions table doesn't exist yet.
+      if (t === "price_predictions" && !db.price_predictions)
+        return j({ code: "42P01", message: 'relation "public.price_predictions" does not exist' }, 404);
       if (method === "GET") return j(db[t] || []);
       if (method === "POST") {
         const body = JSON.parse(req.postData());
@@ -206,6 +209,34 @@ import { chromium, devices } from "playwright";
   await page.click("button[type=submit]");
   await page.waitForSelector(".tabbar");
   check("signed in to real app", true);
+  check(
+    "P5: app loads while the price_predictions table is missing",
+    calls.includes("GET /rest/v1/price_predictions") && !errors.length,
+  );
+  // P5: from now on the table exists and has a (string-typed, as PostgREST may send numerics) row for Elden Ring.
+  db.price_predictions = [
+    {
+      igdb_id: 119133,
+      steam_appid: "1245620",
+      country: "AE",
+      currency: "AED",
+      regular_price: "175.00",
+      current_price: "175.00",
+      current_cut: 0,
+      low_1y: "148.75",
+      median_past_cut: null,
+      sales_seen: 0,
+      history_days: 1130,
+      p_30: "0.030",
+      p_90: "0.080",
+      verdict: "buy",
+      basis: "model",
+      confidence: "high",
+      reason: "Rarely discounted <b>at all</b>.",
+      model_version: "test-1",
+      computed_at: new Date(Date.now() - 2 * 864e5).toISOString(),
+    },
+  ];
   await page.click(".topbar [data-act=add-game]");
   await page.fill("input[name=cat-q]", "boom");
   await page.waitForSelector(".cat-msg[role=alert]");
@@ -227,6 +258,20 @@ import { chromium, devices } from "playwright";
   );
   check("entry inserted as playing", db.entries.length === 1 && db.entries[0].status === "playing");
   check("critic score 95 shown", /\b95\b/.test(await page.locator(".page").innerText()));
+  const pw = (
+    await page
+      .locator(".page .pw-card")
+      .innerText()
+      .catch(() => "")
+  ).replace(/\s+/g, " ");
+  check(
+    "P5: price card from price_predictions: " + pw.slice(0, 90),
+    /Buy now/.test(pw) &&
+      pw.includes("under 5% chance of a 20%+ sale within 30 days, 8% within 90") &&
+      pw.includes("Regular AED 175.00") &&
+      pw.includes("Rarely discounted <b>at all</b>.") &&
+      (await page.locator(".pw-card b").count()) === 0,
+  );
   await page.waitForSelector('.score-chip:has-text("Steam")');
   check(
     "S35 Steam chip from steam action",
