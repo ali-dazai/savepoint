@@ -35,7 +35,7 @@ changelog, plans, suggestions) live in the private `savepoint-notes` repo.
 4. No `Claude-Session:` link in commit messages or PR text here.
 5. No framework, no bundler: files are served as written. `src/data/` is the only code that knows a backend
    exists; a module-graph unit test enforces the layering (`docs/ARCHITECTURE.md`).
-6. Ali writes the buy-or-wait price predictor himself; agents review and test it.
+6. The buy-or-wait predictor lives in the private `savepoint-predictor` repo; this app only reads its table.
 7. Run `git config core.hooksPath .githooks` once per clone: the pre-commit hook (also run in CI) keeps this file
    at 80 lines.
 
