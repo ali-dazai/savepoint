@@ -39,7 +39,6 @@ describe("priceAdvice", () => {
     assert.equal(a.tone, "pw-wait");
     assert.equal(a.odds, "72% chance of a 20%+ sale within 30 days, 88% within 90");
     assert.equal(a.sale, "");
-    assert.equal(a.drought, "");
     assert.equal(a.confidence, "Medium confidence");
     assert.equal(a.reason, "The winter sale is a few weeks away.");
     assert.equal(a.context, "Regular AED 92.00 · 1-year low AED 69.00 · usually −25%");
@@ -63,17 +62,41 @@ describe("priceAdvice", () => {
     assert.equal(a.headline, "Buy now");
     assert.equal(a.tone, "pw-buy");
     assert.equal(a.odds, "under 5% chance of a 20%+ sale within 30 days, 8% within 90");
-    assert.equal(a.drought, "Hasn't been on a 20%+ sale in 3 years");
+    assert.equal(a.reason, "Rarely discounted."); // the pipeline's reason carries the "no sale in N years" copy
     assert.equal(a.confidence, "High confidence");
   });
 
-  it("one year of sale-free history reads 'in a year'; short history or sales seen say nothing", () => {
-    const buy = { verdict: "buy", confidence: "high", sales_seen: 0 };
-    assert.equal(priceAdvice(row({ ...buy, history_days: 400 }), NOW).drought, "Hasn't been on a 20%+ sale in a year");
-    assert.equal(priceAdvice(row({ ...buy, history_days: 200 }), NOW).drought, "");
-    assert.equal(priceAdvice(row({ ...buy, history_days: 900, sales_seen: 1 }), NOW).drought, "");
-    assert.equal(priceAdvice(row({ ...buy, history_days: 900, confidence: "medium" }), NOW).drought, "");
-    assert.equal(priceAdvice(row({ ...buy, history_days: null }), NOW).drought, "");
+  it("a shallow sale (on sale, verdict unsure) doesn't look like a good one", () => {
+    const a = priceAdvice(
+      row({
+        basis: "on_sale",
+        verdict: "unsure",
+        p_30: null,
+        p_90: null,
+        current_cut: 20,
+        current_price: 73.6,
+        low_1y: 46,
+      }),
+      NOW,
+    );
+    assert.equal(a.headline, "On sale, but it has gone lower");
+    assert.equal(a.tone, "pw-unsure");
+  });
+
+  it("a price one cent under the derived low (cut rounding) still matches the 1-year low", () => {
+    const a = priceAdvice(
+      row({
+        basis: "on_sale",
+        verdict: "buy",
+        p_30: null,
+        p_90: null,
+        current_cut: 33,
+        current_price: 10.05,
+        low_1y: 10.04,
+      }),
+      NOW,
+    );
+    assert.equal(a.saleNote, "Matches its lowest price in the past year");
   });
 
   it("buy / on_sale shows the cut and price and whether it matches the 1-year low", () => {
@@ -251,7 +274,7 @@ describe("price data", () => {
       if (r.basis === "on_sale") assert.ok(r.p_30 == null && r.p_90 == null);
       else assert.ok(r.p_90 >= r.p_30);
     }
-    assert.match(priceAdvice(rows.find((r) => r.igdb_id === 9004)).drought, /in 3 years/);
+    assert.match(priceAdvice(rows.find((r) => r.igdb_id === 9004)).reason, /in 3 years/);
   });
   it("reindex builds idx.price and priceOf finds a shelf game's prediction", () => {
     S.profiles = [];

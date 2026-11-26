@@ -9,7 +9,7 @@ export const ITAD_URL = "https://isthereanydeal.com/";
 const MINUS = "−"; // a real minus sign: "−60%"
 const CONFIDENCE = { low: "Low confidence", medium: "Medium confidence", high: "High confidence" };
 // Class modifiers come from this fixed map, never from the row.
-const TONE = { wait: "pw-wait", buy: "pw-buy", on_sale: "pw-sale", unsure: "pw-unsure" };
+const TONE = { wait: "pw-wait", buy: "pw-buy", on_sale: "pw-sale", on_sale_shallow: "pw-unsure", unsure: "pw-unsure" };
 
 // A finite number, or null (null, undefined, "", NaN and strings that aren't numbers all count as missing).
 function num(v) {
@@ -39,16 +39,18 @@ export function money(amount, currency) {
 }
 
 // The texts to show for one prediction, or null when there is nothing (fresh) to show.
-// Returns { tone, headline, odds, sale, saleNote, drought, reason, context, contextItems, confidence, footer };
+// Returns { tone, headline, odds, sale, saleNote, reason, context, contextItems, confidence, footer };
 // any text may be "" (contextItems may be empty; context is the same items joined with " · ").
 export function priceAdvice(row, now = Date.now()) {
   if (!row || typeof row !== "object") return null;
   const at = Date.parse(row.computed_at);
   if (!Number.isFinite(at) || now - at > PRICE_MAX_AGE_DAYS * DAY_MS) return null;
   const onSale = row.basis === "on_sale";
-  const key = onSale ? "on_sale" : row.verdict;
+  // A shallow sale ("unsure": it has gone deeper before) must not look like a good one.
+  const key = onSale ? (row.verdict === "unsure" ? "on_sale_shallow" : "on_sale") : row.verdict;
   const headline = {
     on_sale: "On sale now",
+    on_sale_shallow: "On sale, but it has gone lower",
     wait: "Wait for a sale",
     buy: "Buy now",
     unsure: "Hard to say",
@@ -61,8 +63,6 @@ export function priceAdvice(row, now = Date.now()) {
     cut = num(row.current_cut),
     low = num(row.low_1y),
     usual = num(row.median_past_cut),
-    seen = num(row.sales_seen),
-    days = num(row.history_days),
     p30 = num(row.p_30),
     p90 = num(row.p_90);
 
@@ -81,14 +81,8 @@ export function priceAdvice(row, now = Date.now()) {
   if (onSale && price != null) {
     sale =
       cut != null && cut > 0 ? `${MINUS}${Math.round(cut)}% now: ${money(price, cur)}` : `Now ${money(price, cur)}`;
-    if (low != null) saleNote = price <= low ? "Matches its lowest price in the past year" : "";
-  }
-
-  // "Hasn't been on a 20%+ sale in 3 years": only for a confident buy with a long, sale-free history.
-  let drought = "";
-  if (row.verdict === "buy" && row.confidence === "high" && !onSale && seen === 0 && days != null && days >= 365) {
-    const years = Math.floor(days / 365);
-    drought = `Hasn't been on a 20%+ sale in ${years === 1 ? "a year" : `${years} years`}`;
+    // a cent of slack: Steam rounds cuts to whole percents, so the derived low can sit a cent under the price
+    if (low != null) saleNote = price <= low + 0.011 ? "Matches its lowest price in the past year" : "";
   }
 
   const context = [];
@@ -107,7 +101,6 @@ export function priceAdvice(row, now = Date.now()) {
     odds,
     sale,
     saleNote,
-    drought,
     reason: typeof row.reason === "string" ? row.reason.slice(0, 200) : "",
     context: context.join(" · "),
     contextItems: context,
@@ -126,7 +119,6 @@ export function priceCard(row, now = Date.now()) {
     <p class="pw-verdict">${esc(a.headline)}</p>
     ${line("pw-odds", a.odds)}
     ${a.sale ? `<p class="pw-sale">${esc(a.sale)}${a.saleNote ? ` <span class="pw-low">${esc(a.saleNote)}</span>` : ""}</p>` : ""}
-    ${line("pw-drought", a.drought)}
     ${line("pw-reason", a.reason)}
     ${a.contextItems.length ? `<p class="pw-context">${a.contextItems.map((x) => `<span>${esc(x)}</span>`).join(" · ")}</p>` : ""}
     <p class="pw-foot">${esc(a.footer)} · <a href="${ITAD_URL}" target="_blank" rel="noopener">Price history: IsThereAnyDeal</a></p>

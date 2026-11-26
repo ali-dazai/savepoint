@@ -96,7 +96,7 @@ fs.mkdirSync(out, { recursive: true });
   check("Elden Ring: headline 'Buy now'", (await page.locator(".pw-verdict").innerText()) === "Buy now");
   check(
     "Elden Ring: rarely discounted, under 5%, high confidence",
-    t.includes("Hasn't been on a 20%+ sale in 3 years") &&
+    t.includes("Hasn't had a 20%+ sale on Steam in 3 years") &&
       t.includes("under 5% chance") &&
       t.includes("High confidence"),
   );

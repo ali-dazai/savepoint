@@ -179,7 +179,7 @@ export function demoPrices() {
       verdict: "buy",
       basis: "model",
       confidence: "high",
-      reason: "Rarely discounted: waiting is unlikely to save you much.",
+      reason: "Hasn't had a 20%+ sale on Steam in 3 years.",
       computed_at: daysAgo(1, 4),
     },
     {
