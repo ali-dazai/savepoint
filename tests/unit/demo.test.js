@@ -167,4 +167,37 @@ describe("DemoApi", () => {
       }
     });
   });
+
+  describe("prices (P5)", () => {
+    const withStored = (db, fn) => {
+      globalThis.localStorage = { getItem: () => JSON.stringify(db), setItem() {}, removeItem() {} };
+      try {
+        return fn();
+      } finally {
+        delete globalThis.localStorage;
+      }
+    };
+    it("loadAll returns the demo price rows, without the bookkeeping field", async () => {
+      const db = await new DemoApi().loadAll();
+      assert.deepEqual(db.prices.map((r) => r.igdb_id).sort(), [9001, 9004, 9011, 9013]);
+      assert.equal("prices_at" in db, false);
+    });
+    it("demo data saved before prices existed gets them", async () => {
+      const old = { ...new DemoApi().db };
+      delete old.prices;
+      delete old.prices_at;
+      const api = withStored(old, () => new DemoApi());
+      assert.equal((await api.loadAll()).prices.length, 4);
+    });
+    it("an edited row is kept, but week-old demo prices are remade", async () => {
+      const db = new DemoApi().db;
+      const stale = new Date(Date.now() - 20 * 864e5).toISOString();
+      db.prices[0].computed_at = stale;
+      const kept = withStored(db, () => new DemoApi());
+      assert.equal((await kept.loadAll()).prices[0].computed_at, stale);
+      db.prices_at = stale;
+      const remade = withStored(db, () => new DemoApi());
+      assert.notEqual((await remade.loadAll()).prices[0].computed_at, stale);
+    });
+  });
 });

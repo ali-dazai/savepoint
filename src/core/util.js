@@ -50,8 +50,8 @@ export function ago(iso) {
     year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric",
   });
 }
-export function since(iso) {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / DAY_MS);
+export function since(iso, now = Date.now()) {
+  const days = Math.floor((now - new Date(iso).getTime()) / DAY_MS);
   if (days < 1) return "today";
   if (days < 2) return "yesterday";
   if (days < 14) return `${days} days ago`;

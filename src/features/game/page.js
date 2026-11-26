@@ -1,8 +1,20 @@
 // The game page: opened case header with score chips, your log form, about, friends' logs, actions.
 import { ICON, SESSION_STEPS, STATUSES, STATUS_LABEL } from "../../core/constants.js";
-import { S, catOf, catRow, coverUrl, groupScore, idx, myEntry, nameOf, releaseInfo } from "../../core/state.js";
+import {
+  S,
+  catOf,
+  catRow,
+  coverUrl,
+  groupScore,
+  idx,
+  myEntry,
+  nameOf,
+  priceOf,
+  releaseInfo,
+} from "../../core/state.js";
 import { $, ago, dateInput, daysUntil, esc, fmtHours, fmtNum, fmtRating, round1, took } from "../../core/util.js";
 import { pickReason } from "../picks/picks.js";
+import { priceCard } from "./price.js";
 import { avatar, spoilerText, star, stars } from "../../ui/cover.js";
 import { pageFrame, pageHead } from "../../ui/sheet.js";
 import { gameHueSat, gameTint } from "../../ui/theme.js";
@@ -105,8 +117,13 @@ export function gamePage(id) {
       : "",
   });
   const showDates = d.started_at || d.finished_at || (mine && mine.status !== "want");
+  // P5: the buy-or-wait card. Up top while you still want (or don't have) the game; below your log otherwise.
+  // Placement follows your saved status, not the draft, so it doesn't jump while you tap status buttons.
+  const price = c ? priceCard(priceOf(g)) : "";
+  const priceFirst = !mine || mine.status === "want";
   const body = `
     ${!mine && pickReason(id) ? `<p class="why">Picked for you: ${esc(pickReason(id))}</p>` : ""}
+    ${priceFirst ? price : ""}
     <section class="card">
       <form data-form="entry" data-id="${id}">
         <div class="card-head"><h2>${mine ? "Your log" : "Log it"}</h2>${mine ? `<span class="subtle small">Updated ${esc(ago(mine.updated_at))}</span>` : ""}</div>
@@ -134,6 +151,7 @@ export function gamePage(id) {
         <button class="btn block" type="submit">${mine ? "Save changes" : "Add to my shelf"}</button>
       </form>
     </section>
+    ${priceFirst ? "" : price}
     ${aboutHTML(c)}
     <section><h2 class="section-title">Friends</h2><div id="others">${othersReviews(id)}</div></section>
     <div class="page-actions">

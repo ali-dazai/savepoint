@@ -12,6 +12,7 @@ export async function reload() {
   S.games = data.games;
   S.entries = data.entries;
   S.catalog = data.catalog || [];
+  S.prices = data.prices || [];
   S.lastLoad = Date.now();
   reindex();
   renderMain();

@@ -7,6 +7,26 @@ const CATALOG_COLS =
 function cleanCatalog(x) {
   return { ...x, critic_score: x.critic_score == null ? null : Number(x.critic_score) };
 }
+// P5 buy-or-wait: written only by the `prices` Edge Function; members read it.
+const PRICE_COLS =
+  "igdb_id, steam_appid, country, currency, regular_price, current_price, current_cut, low_1y, median_past_cut, sales_seen, history_days, p_30, p_90, verdict, basis, confidence, reason, model_version, computed_at";
+const PRICE_NUMS = [
+  "igdb_id",
+  "regular_price",
+  "current_price",
+  "current_cut",
+  "low_1y",
+  "median_past_cut",
+  "sales_seen",
+  "history_days",
+  "p_30",
+  "p_90",
+];
+export function cleanPrice(x) {
+  const out = { ...x };
+  for (const k of PRICE_NUMS) out[k] = x[k] == null ? null : Number(x[k]);
+  return out;
+}
 
 // True when the vendored supabase-js bundle (vendor/supabase.js) has loaded.
 export const supabaseLoaded = () => !!window.supabase;
@@ -72,7 +92,7 @@ export class SupabaseApi {
     if (error) throw new Error(errMsg(error));
   }
   async loadAll() {
-    const [p, g, e, c] = await Promise.all([
+    const [p, g, e, c, pr] = await Promise.all([
       this.sb.from("profiles").select("id, display_name, color, created_at, is_admin"),
       this.sb.from("games").select("id, title, platform, year, cover_url, added_by, created_at, igdb_id"),
       this.sb
@@ -81,6 +101,7 @@ export class SupabaseApi {
           "id, game_id, user_id, status, rating, hours, review, spoiler, started_at, finished_at, created_at, updated_at",
         ),
       this.sb.from("catalog_games").select(CATALOG_COLS),
+      this.sb.from("price_predictions").select(PRICE_COLS),
     ]);
     const err = p.error || g.error || e.error;
     if (err) throw new Error(errMsg(err));
@@ -93,6 +114,8 @@ export class SupabaseApi {
         hours: x.hours == null ? null : Number(x.hours),
       })),
       catalog: c.error ? [] : c.data.map(cleanCatalog),
+      // Optional: until the table exists (or if it errors) the app simply shows no price card.
+      prices: pr.error || !Array.isArray(pr.data) ? [] : pr.data.map(cleanPrice),
     };
   }
   async addGame(fields) {
